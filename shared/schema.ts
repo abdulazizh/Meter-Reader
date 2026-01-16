@@ -53,9 +53,10 @@ export const readings = pgTable("readings", {
     .default(sql`gen_random_uuid()`),
   meterId: varchar("meter_id").notNull().references(() => meters.id),
   readerId: varchar("reader_id").notNull().references(() => readers.id),
-  newReading: integer("new_reading").notNull(),
+  newReading: integer("new_reading"),
   photoPath: text("photo_path"),
   notes: text("notes"),
+  skipReason: text("skip_reason"),
   isCompleted: boolean("is_completed").default(true).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -100,6 +101,7 @@ export const insertReadingSchema = createInsertSchema(readings).pick({
   newReading: true,
   photoPath: true,
   notes: true,
+  skipReason: true,
 });
 
 export type InsertReader = z.infer<typeof insertReaderSchema>;

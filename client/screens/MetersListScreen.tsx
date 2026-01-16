@@ -235,8 +235,12 @@ export default function MetersListScreen() {
     setRefreshing(false);
   }, [refetch]);
 
-  const handleMeterPress = (meter: MeterWithReading) => {
-    navigation.navigate("ReadingEntry", { meter });
+  const handleMeterPress = (meter: MeterWithReading, index: number) => {
+    navigation.navigate("ReadingEntry", { 
+      meter, 
+      allMeters: filteredMeters, 
+      currentIndex: index 
+    });
   };
 
   const handleSettingsPress = async () => {
@@ -248,7 +252,7 @@ export default function MetersListScreen() {
     <MeterCard
       meter={item}
       index={index}
-      onPress={() => handleMeterPress(item)}
+      onPress={() => handleMeterPress(item, index)}
     />
   );
 

@@ -10,6 +10,7 @@ import {
   Linking,
   ActivityIndicator,
   ScrollView,
+  Modal,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRoute, useNavigation, RouteProp } from "@react-navigation/native";
@@ -35,21 +36,35 @@ import { apiRequest } from "@/lib/query-client";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
+const SKIP_REASONS = [
+  { id: "closed", label: "مغلق" },
+  { id: "broken", label: "عاطل" },
+  { id: "not_found", label: "غير موجود" },
+  { id: "demolished", label: "مهدوم" },
+  { id: "other", label: "سبب آخر" },
+];
+
 export default function ReadingEntryScreen() {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const route = useRoute<RouteProp<RootStackParamList, "ReadingEntry">>();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const queryClient = useQueryClient();
-  const { meter } = route.params;
+  const { meter, allMeters, currentIndex } = route.params;
 
   const [newReading, setNewReading] = useState("");
   const [notes, setNotes] = useState("");
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [showCamera, setShowCamera] = useState(false);
   const [cameraRef, setCameraRef] = useState<CameraView | null>(null);
+  const [showSkipModal, setShowSkipModal] = useState(false);
+  const [otherReason, setOtherReason] = useState("");
 
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+
+  const hasPrevious = currentIndex > 0;
+  const hasNext = currentIndex < allMeters.length - 1;
+  const isCompleted = meter.latestReading !== null && meter.latestReading !== undefined;
 
   const buttonScale = useSharedValue(1);
 
@@ -71,15 +86,96 @@ export default function ReadingEntryScreen() {
     onSuccess: async () => {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       queryClient.invalidateQueries({ queryKey: ["/api/meters"] });
-      Alert.alert("تم الحفظ", "تم حفظ القراءة بنجاح", [
-        { text: "حسناً", onPress: () => navigation.goBack() },
-      ]);
+      if (hasNext) {
+        goToNextMeter();
+      } else {
+        Alert.alert("تم الحفظ", "تم حفظ جميع القراءات", [
+          { text: "حسناً", onPress: () => navigation.goBack() },
+        ]);
+      }
     },
     onError: async (error) => {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert("خطأ", "حدث خطأ أثناء حفظ القراءة");
     },
   });
+
+  const skipMutation = useMutation({
+    mutationFn: async (data: { skipReason: string }) => {
+      const response = await apiRequest("POST", "/api/readings", {
+        meterId: meter.id,
+        readerId: meter.readerId,
+        skipReason: data.skipReason,
+      });
+      return response.json();
+    },
+    onSuccess: async () => {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      queryClient.invalidateQueries({ queryKey: ["/api/meters"] });
+      goToNextMeter();
+    },
+    onError: async (error) => {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert("خطأ", "حدث خطأ أثناء حفظ السبب");
+    },
+  });
+
+  const resetForm = () => {
+    setNewReading("");
+    setNotes("");
+    setPhotoUri(null);
+    setOtherReason("");
+  };
+
+  const goToNextMeter = () => {
+    if (hasNext) {
+      const nextMeter = allMeters[currentIndex + 1];
+      resetForm();
+      navigation.replace("ReadingEntry", {
+        meter: nextMeter,
+        allMeters,
+        currentIndex: currentIndex + 1,
+      });
+    } else {
+      navigation.goBack();
+    }
+  };
+
+  const goToPreviousMeter = () => {
+    if (hasPrevious) {
+      const prevMeter = allMeters[currentIndex - 1];
+      resetForm();
+      navigation.replace("ReadingEntry", {
+        meter: prevMeter,
+        allMeters,
+        currentIndex: currentIndex - 1,
+      });
+    }
+  };
+
+  const handleNextPress = async () => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (!newReading.trim() && !isCompleted) {
+      setShowSkipModal(true);
+    } else {
+      goToNextMeter();
+    }
+  };
+
+  const handlePreviousPress = async () => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    goToPreviousMeter();
+  };
+
+  const handleSkipWithReason = async (reason: string) => {
+    const reasonLabel = reason === "other" ? otherReason : SKIP_REASONS.find(r => r.id === reason)?.label || reason;
+    if (reason === "other" && !otherReason.trim()) {
+      Alert.alert("تنبيه", "يرجى إدخال السبب");
+      return;
+    }
+    setShowSkipModal(false);
+    skipMutation.mutate({ skipReason: reasonLabel });
+  };
 
   const formatDate = (date: Date | string) => {
     const d = new Date(date);
@@ -406,7 +502,110 @@ export default function ReadingEntryScreen() {
             )}
           </Pressable>
         </View>
+
+        <View style={styles.navigationSection}>
+          <View style={styles.meterCounter}>
+            <ThemedText style={[styles.counterText, { color: theme.textSecondary }]}>
+              {currentIndex + 1} / {allMeters.length}
+            </ThemedText>
+          </View>
+          <View style={styles.navigationButtons}>
+            <Pressable
+              onPress={handleNextPress}
+              disabled={skipMutation.isPending}
+              style={[
+                styles.navButton,
+                { backgroundColor: hasNext ? AppColors.accent : theme.pending },
+              ]}
+              testID="button-next"
+            >
+              {skipMutation.isPending ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <>
+                  <ThemedText style={styles.navButtonText}>
+                    {hasNext ? "التالي" : "إنهاء"}
+                  </ThemedText>
+                  <Feather name="arrow-left" size={20} color="#FFFFFF" />
+                </>
+              )}
+            </Pressable>
+            <Pressable
+              onPress={handlePreviousPress}
+              disabled={!hasPrevious}
+              style={[
+                styles.navButton,
+                { backgroundColor: hasPrevious ? theme.backgroundSecondary : theme.pending },
+              ]}
+              testID="button-previous"
+            >
+              <Feather name="arrow-right" size={20} color={hasPrevious ? theme.text : theme.textSecondary} />
+              <ThemedText style={[styles.navButtonText, { color: hasPrevious ? theme.text : theme.textSecondary }]}>
+                السابق
+              </ThemedText>
+            </Pressable>
+          </View>
+        </View>
       </KeyboardAwareScrollViewCompat>
+
+      <Modal
+        visible={showSkipModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSkipModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: theme.backgroundDefault }]}>
+            <View style={styles.modalHeader}>
+              <ThemedText type="h3" style={styles.modalTitle}>
+                سبب عدم القراءة
+              </ThemedText>
+              <Pressable onPress={() => setShowSkipModal(false)} style={styles.modalCloseButton}>
+                <Feather name="x" size={24} color={theme.text} />
+              </Pressable>
+            </View>
+            <ThemedText style={[styles.modalSubtitle, { color: theme.textSecondary }]}>
+              يرجى اختيار سبب عدم قراءة العداد
+            </ThemedText>
+            
+            <View style={styles.reasonsList}>
+              {SKIP_REASONS.map((reason) => (
+                <Pressable
+                  key={reason.id}
+                  onPress={() => reason.id !== "other" && handleSkipWithReason(reason.id)}
+                  style={[
+                    styles.reasonButton,
+                    { backgroundColor: theme.backgroundSecondary, borderColor: theme.border },
+                  ]}
+                >
+                  <ThemedText style={styles.reasonText}>{reason.label}</ThemedText>
+                  {reason.id !== "other" && (
+                    <Feather name="chevron-left" size={20} color={theme.textSecondary} />
+                  )}
+                </Pressable>
+              ))}
+            </View>
+
+            <View style={styles.otherReasonSection}>
+              <TextInput
+                style={[styles.otherReasonInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, borderColor: theme.border }]}
+                placeholder="أو اكتب سبباً آخر..."
+                placeholderTextColor={theme.textSecondary}
+                value={otherReason}
+                onChangeText={setOtherReason}
+              />
+              {otherReason.trim().length > 0 ? (
+                <Pressable
+                  onPress={() => handleSkipWithReason("other")}
+                  style={[styles.submitOtherButton, { backgroundColor: AppColors.accent }]}
+                >
+                  <ThemedText style={styles.submitOtherText}>إرسال</ThemedText>
+                </Pressable>
+              ) : null}
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -631,6 +830,105 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 18,
     fontFamily: "Cairo_700Bold",
+  },
+  navigationSection: {
+    marginTop: Spacing.xl,
+    paddingTop: Spacing.lg,
+  },
+  meterCounter: {
+    alignItems: "center",
+    marginBottom: Spacing.md,
+  },
+  counterText: {
+    fontSize: 14,
+    fontFamily: "Cairo_600SemiBold",
+  },
+  navigationButtons: {
+    flexDirection: "row",
+    gap: Spacing.md,
+  },
+  navButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    height: 50,
+    borderRadius: BorderRadius.md,
+    gap: Spacing.sm,
+  },
+  navButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontFamily: "Cairo_600SemiBold",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: Spacing.lg,
+  },
+  modalContent: {
+    width: "100%",
+    maxWidth: 400,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.lg,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: Spacing.sm,
+  },
+  modalTitle: {
+    fontFamily: "Cairo_700Bold",
+  },
+  modalCloseButton: {
+    padding: Spacing.xs,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    fontFamily: "Cairo_400Regular",
+    marginBottom: Spacing.lg,
+  },
+  reasonsList: {
+    gap: Spacing.sm,
+    marginBottom: Spacing.lg,
+  },
+  reasonButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+  },
+  reasonText: {
+    fontSize: 16,
+    fontFamily: "Cairo_600SemiBold",
+  },
+  otherReasonSection: {
+    gap: Spacing.sm,
+  },
+  otherReasonInput: {
+    height: 50,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    fontSize: 16,
+    fontFamily: "Cairo_400Regular",
+    textAlign: "right",
+  },
+  submitOtherButton: {
+    alignItems: "center",
+    justifyContent: "center",
+    height: 44,
+    borderRadius: BorderRadius.md,
+  },
+  submitOtherText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontFamily: "Cairo_600SemiBold",
   },
   cameraContainer: {
     flex: 1,

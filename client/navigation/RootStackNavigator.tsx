@@ -9,7 +9,7 @@ import type { MeterWithReading } from "@shared/schema";
 
 export type RootStackParamList = {
   MetersList: undefined;
-  ReadingEntry: { meter: MeterWithReading };
+  ReadingEntry: { meter: MeterWithReading; allMeters: MeterWithReading[]; currentIndex: number };
   Settings: undefined;
 };
 
