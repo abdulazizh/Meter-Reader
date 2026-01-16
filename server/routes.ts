@@ -255,6 +255,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/reader/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const reader = await storage.getReader(id);
+      if (!reader) {
+        return res.status(404).json({ error: "Reader not found" });
+      }
+      const meters = await storage.getMetersByReaderId(id);
+      const allReadings = await storage.getAllReadingsByReaderId(id);
+      
+      const completedMeters = meters.filter(m => m.latestReading !== null).length;
+      
+      res.json({
+        id: reader.id,
+        username: reader.username,
+        displayName: reader.displayName,
+        stats: {
+          totalMeters: meters.length,
+          completedMeters,
+          totalReadings: allReadings.length,
+        }
+      });
+    } catch (error) {
+      console.error("Error fetching reader:", error);
+      res.status(500).json({ error: "Failed to fetch reader" });
+    }
+  });
+
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok" });
   });

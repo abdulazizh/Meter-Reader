@@ -54,10 +54,22 @@ function SettingsItem({ icon, title, subtitle, onPress, showArrow = true }: Sett
   );
 }
 
+interface ReaderProfile {
+  id: string;
+  username: string;
+  displayName: string;
+  stats: {
+    totalMeters: number;
+    completedMeters: number;
+    totalReadings: number;
+  };
+}
+
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const [readerId, setReaderId] = useState<string | null>(null);
+  const [readerProfile, setReaderProfile] = useState<ReaderProfile | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const hasSeeded = useRef(false);
 
@@ -70,6 +82,7 @@ export default function SettingsScreen() {
         const data = await response.json();
         if (data.readerId) {
           setReaderId(data.readerId);
+          fetchReaderProfile(data.readerId);
         }
       } catch (error) {
         console.error("Error seeding data:", error);
@@ -77,6 +90,17 @@ export default function SettingsScreen() {
     };
     seedData();
   }, []);
+
+  const fetchReaderProfile = async (id: string) => {
+    try {
+      const url = new URL(`/api/reader/${id}`, getApiUrl());
+      const response = await fetch(url.toString());
+      const data = await response.json();
+      setReaderProfile(data);
+    } catch (error) {
+      console.error("Error fetching reader profile:", error);
+    }
+  };
 
   const handleExport = async () => {
     if (!readerId) {
@@ -133,13 +157,44 @@ export default function SettingsScreen() {
         />
         <View style={styles.profileInfo}>
           <ThemedText type="h3" style={styles.profileName}>
-            قارئ العدادات
+            {readerProfile?.displayName || "قارئ العدادات"}
           </ThemedText>
           <ThemedText style={[styles.profileId, { color: theme.textSecondary }]}>
-            {readerId ? `معرف القارئ: ${readerId.slice(0, 8)}...` : "جاري التحميل..."}
+            {readerProfile?.username || "جاري التحميل..."}
           </ThemedText>
         </View>
       </View>
+
+      {readerProfile ? (
+        <View style={[styles.statsCard, { backgroundColor: theme.backgroundDefault }]}>
+          <View style={styles.statItem}>
+            <ThemedText style={[styles.statValue, { color: AppColors.primary }]}>
+              {readerProfile.stats.totalMeters}
+            </ThemedText>
+            <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>
+              إجمالي العدادات
+            </ThemedText>
+          </View>
+          <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
+          <View style={styles.statItem}>
+            <ThemedText style={[styles.statValue, { color: AppColors.success }]}>
+              {readerProfile.stats.completedMeters}
+            </ThemedText>
+            <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>
+              تم قراءتها
+            </ThemedText>
+          </View>
+          <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
+          <View style={styles.statItem}>
+            <ThemedText style={[styles.statValue, { color: AppColors.accent }]}>
+              {readerProfile.stats.totalReadings}
+            </ThemedText>
+            <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>
+              القراءات المسجلة
+            </ThemedText>
+          </View>
+        </View>
+      ) : null}
 
       <View style={styles.section}>
         <ThemedText style={[styles.sectionTitle, { color: theme.textSecondary }]}>
@@ -233,6 +288,29 @@ const styles = StyleSheet.create({
   profileId: {
     fontSize: 14,
     fontFamily: "Cairo_400Regular",
+  },
+  statsCard: {
+    flexDirection: "row",
+    padding: Spacing.lg,
+    borderRadius: BorderRadius.lg,
+    marginBottom: Spacing.xl,
+  },
+  statItem: {
+    flex: 1,
+    alignItems: "center",
+  },
+  statValue: {
+    fontSize: 24,
+    fontFamily: "Cairo_700Bold",
+  },
+  statLabel: {
+    fontSize: 12,
+    fontFamily: "Cairo_400Regular",
+    marginTop: 4,
+  },
+  statDivider: {
+    width: 1,
+    marginHorizontal: Spacing.md,
   },
   section: {
     marginBottom: Spacing.xl,
