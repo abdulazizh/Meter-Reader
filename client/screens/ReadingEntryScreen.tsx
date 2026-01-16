@@ -649,15 +649,18 @@ const styles = StyleSheet.create({
   },
   infoItem: {
     flex: 1,
+    alignItems: "flex-start",
   },
   infoLabel: {
     fontSize: 12,
     fontFamily: "Cairo_400Regular",
-    marginBottom: 2,
+    marginBottom: 4,
+    textAlign: "right",
   },
   infoValue: {
     fontSize: 16,
     fontFamily: "Cairo_600SemiBold",
+    textAlign: "right",
   },
   addressSection: {
     marginTop: Spacing.sm,
@@ -693,14 +696,17 @@ const styles = StyleSheet.create({
   },
   previousReadingInfo: {
     flex: 1,
+    alignItems: "flex-start",
   },
   previousReadingValue: {
     fontSize: 22,
     fontFamily: "Cairo_700Bold",
+    marginTop: 4,
   },
   previousReadingDate: {
-    fontSize: 14,
-    fontFamily: "Cairo_400Regular",
+    fontSize: 16,
+    fontFamily: "Cairo_600SemiBold",
+    marginTop: 4,
   },
   financialCard: {
     padding: Spacing.lg,

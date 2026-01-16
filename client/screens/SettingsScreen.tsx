@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as Sharing from "expo-sharing";
-import * as FileSystem from "expo-file-system";
+import { Paths, File } from "expo-file-system";
 
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { ThemedText } from "@/components/ThemedText";
@@ -93,13 +93,13 @@ export default function SettingsScreen() {
       const data = await response.json();
 
       const fileName = `meter_readings_${new Date().toISOString().split('T')[0]}.json`;
-      const filePath = `${FileSystem.documentDirectory}${fileName}`;
+      const exportFile = new File(Paths.cache, fileName);
 
-      await FileSystem.writeAsStringAsync(filePath, JSON.stringify(data, null, 2));
+      await exportFile.write(JSON.stringify(data, null, 2));
 
       const canShare = await Sharing.isAvailableAsync();
       if (canShare) {
-        await Sharing.shareAsync(filePath, {
+        await Sharing.shareAsync(exportFile.uri, {
           mimeType: "application/json",
           dialogTitle: "تصدير القراءات",
         });
