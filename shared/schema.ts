@@ -1,5 +1,5 @@
 import { sql, relations } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, timestamp, boolean, numeric } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -26,8 +26,15 @@ export const meters = pgTable("meters", {
   sequence: text("sequence").notNull(),
   meterNumber: text("meter_number").notNull(),
   category: text("category").notNull(),
+  subscriberName: text("subscriber_name").notNull(),
+  record: text("record").notNull(),
+  block: text("block").notNull(),
+  property: text("property").notNull(),
   previousReading: integer("previous_reading").notNull(),
   previousReadingDate: timestamp("previous_reading_date").notNull(),
+  currentAmount: numeric("current_amount", { precision: 12, scale: 2 }).notNull().default("0"),
+  debts: numeric("debts", { precision: 12, scale: 2 }).notNull().default("0"),
+  totalAmount: numeric("total_amount", { precision: 12, scale: 2 }).notNull().default("0"),
   readerId: varchar("reader_id").notNull().references(() => readers.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -75,8 +82,15 @@ export const insertMeterSchema = createInsertSchema(meters).pick({
   sequence: true,
   meterNumber: true,
   category: true,
+  subscriberName: true,
+  record: true,
+  block: true,
+  property: true,
   previousReading: true,
   previousReadingDate: true,
+  currentAmount: true,
+  debts: true,
+  totalAmount: true,
   readerId: true,
 });
 

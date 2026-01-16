@@ -23,6 +23,7 @@ export interface IStorage {
   createMeter(meter: InsertMeter): Promise<Meter>;
   
   getReadingsByMeterId(meterId: string): Promise<Reading[]>;
+  getAllReadingsByReaderId(readerId: string): Promise<Reading[]>;
   getLatestReadingByMeterId(meterId: string): Promise<Reading | undefined>;
   createReading(reading: InsertReading): Promise<Reading>;
   updateMeterAfterReading(meterId: string, newReading: number): Promise<void>;
@@ -85,6 +86,14 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(readings)
       .where(eq(readings.meterId, meterId))
+      .orderBy(desc(readings.createdAt));
+  }
+
+  async getAllReadingsByReaderId(readerId: string): Promise<Reading[]> {
+    return db
+      .select()
+      .from(readings)
+      .where(eq(readings.readerId, readerId))
       .orderBy(desc(readings.createdAt));
   }
 

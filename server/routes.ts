@@ -83,51 +83,93 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const sampleMeters: Omit<InsertMeter, "readerId">[] = [
           {
             accountNumber: "1001234567",
-            sequence: "سجل 1 / بلوك 5 / عقار 12",
+            sequence: "001",
             meterNumber: "M-2024-001",
             category: "سكني",
+            subscriberName: "أحمد محمد علي",
+            record: "1",
+            block: "5",
+            property: "12",
             previousReading: 15420,
             previousReadingDate: new Date("2024-12-15"),
+            currentAmount: "45000",
+            debts: "12500",
+            totalAmount: "57500",
           },
           {
             accountNumber: "1001234568",
-            sequence: "سجل 1 / بلوك 5 / عقار 13",
+            sequence: "002",
             meterNumber: "M-2024-002",
             category: "تجاري",
+            subscriberName: "محل الرحمن للتجارة",
+            record: "1",
+            block: "5",
+            property: "13",
             previousReading: 28750,
             previousReadingDate: new Date("2024-12-15"),
+            currentAmount: "125000",
+            debts: "0",
+            totalAmount: "125000",
           },
           {
             accountNumber: "1001234569",
-            sequence: "سجل 1 / بلوك 5 / عقار 14",
+            sequence: "003",
             meterNumber: "M-2024-003",
             category: "صناعي",
+            subscriberName: "مصنع النور للحديد",
+            record: "1",
+            block: "5",
+            property: "14",
             previousReading: 45230,
             previousReadingDate: new Date("2024-12-15"),
+            currentAmount: "350000",
+            debts: "75000",
+            totalAmount: "425000",
           },
           {
             accountNumber: "1001234570",
-            sequence: "سجل 1 / بلوك 6 / عقار 1",
+            sequence: "004",
             meterNumber: "M-2024-004",
             category: "سكني",
+            subscriberName: "فاطمة حسين جاسم",
+            record: "1",
+            block: "6",
+            property: "1",
             previousReading: 12100,
             previousReadingDate: new Date("2024-12-14"),
+            currentAmount: "32000",
+            debts: "8500",
+            totalAmount: "40500",
           },
           {
             accountNumber: "1001234571",
-            sequence: "سجل 1 / بلوك 6 / عقار 2",
+            sequence: "005",
             meterNumber: "M-2024-005",
             category: "سكني",
+            subscriberName: "علي عبد الكريم",
+            record: "1",
+            block: "6",
+            property: "2",
             previousReading: 8750,
             previousReadingDate: new Date("2024-12-14"),
+            currentAmount: "28000",
+            debts: "0",
+            totalAmount: "28000",
           },
           {
             accountNumber: "1001234572",
-            sequence: "سجل 2 / بلوك 1 / عقار 1",
+            sequence: "006",
             meterNumber: "M-2024-006",
             category: "تجاري",
+            subscriberName: "مطعم الصفا",
+            record: "2",
+            block: "1",
+            property: "1",
             previousReading: 35600,
             previousReadingDate: new Date("2024-12-13"),
+            currentAmount: "95000",
+            debts: "22000",
+            totalAmount: "117000",
           },
         ];
 
@@ -143,6 +185,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error seeding data:", error);
       res.status(500).json({ error: "Failed to seed data" });
+    }
+  });
+
+  app.get("/api/export/:readerId", async (req, res) => {
+    try {
+      const { readerId } = req.params;
+      const meters = await storage.getMetersByReaderId(readerId);
+      const allReadings = await storage.getAllReadingsByReaderId(readerId);
+      
+      const exportData = {
+        exportDate: new Date().toISOString(),
+        readerId,
+        totalMeters: meters.length,
+        completedReadings: allReadings.length,
+        meters: meters.map((meter) => {
+          const meterReadings = allReadings.filter((r) => r.meterId === meter.id);
+          return {
+            accountNumber: meter.accountNumber,
+            sequence: meter.sequence,
+            meterNumber: meter.meterNumber,
+            category: meter.category,
+            subscriberName: meter.subscriberName,
+            address: {
+              record: meter.record,
+              block: meter.block,
+              property: meter.property,
+            },
+            previousReading: meter.previousReading,
+            previousReadingDate: meter.previousReadingDate,
+            amounts: {
+              currentAmount: meter.currentAmount,
+              debts: meter.debts,
+              totalAmount: meter.totalAmount,
+            },
+            readings: meterReadings.map((r) => ({
+              newReading: r.newReading,
+              photoPath: r.photoPath,
+              notes: r.notes,
+              createdAt: r.createdAt,
+            })),
+          };
+        }),
+      };
+      
+      res.json(exportData);
+    } catch (error) {
+      console.error("Error exporting data:", error);
+      res.status(500).json({ error: "Failed to export data" });
     }
   });
 
