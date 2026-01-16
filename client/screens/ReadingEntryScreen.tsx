@@ -644,23 +644,25 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   infoRow: {
-    flexDirection: "row",
+    flexDirection: "row-reverse",
     marginBottom: Spacing.md,
   },
   infoItem: {
     flex: 1,
-    alignItems: "flex-start",
+    alignItems: "flex-end",
   },
   infoLabel: {
     fontSize: 12,
     fontFamily: "Cairo_400Regular",
     marginBottom: 4,
     textAlign: "right",
+    writingDirection: "rtl",
   },
   infoValue: {
     fontSize: 16,
     fontFamily: "Cairo_600SemiBold",
     textAlign: "right",
+    writingDirection: "rtl",
   },
   addressSection: {
     marginTop: Spacing.sm,
@@ -672,7 +674,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm,
   },
   addressRow: {
-    flexDirection: "row",
+    flexDirection: "row-reverse",
     justifyContent: "space-between",
   },
   addressItem: {
@@ -689,24 +691,28 @@ const styles = StyleSheet.create({
     fontFamily: "Cairo_700Bold",
   },
   previousReadingSection: {
-    flexDirection: "row",
+    flexDirection: "row-reverse",
     borderTopWidth: 1,
     paddingTop: Spacing.md,
     marginTop: Spacing.sm,
   },
   previousReadingInfo: {
     flex: 1,
-    alignItems: "flex-start",
+    alignItems: "flex-end",
   },
   previousReadingValue: {
     fontSize: 22,
     fontFamily: "Cairo_700Bold",
     marginTop: 4,
+    textAlign: "right",
+    writingDirection: "rtl",
   },
   previousReadingDate: {
     fontSize: 16,
     fontFamily: "Cairo_600SemiBold",
     marginTop: 4,
+    textAlign: "right",
+    writingDirection: "rtl",
   },
   financialCard: {
     padding: Spacing.lg,
@@ -719,23 +725,28 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   financialRow: {
-    flexDirection: "row",
+    flexDirection: "row-reverse",
     marginBottom: Spacing.md,
   },
   financialItem: {
     flex: 1,
+    alignItems: "flex-end",
   },
   financialLabel: {
     fontSize: 12,
     fontFamily: "Cairo_400Regular",
     marginBottom: 2,
+    textAlign: "right",
+    writingDirection: "rtl",
   },
   financialValue: {
     fontSize: 16,
     fontFamily: "Cairo_600SemiBold",
+    textAlign: "right",
+    writingDirection: "rtl",
   },
   totalRow: {
-    flexDirection: "row",
+    flexDirection: "row-reverse",
     justifyContent: "space-between",
     alignItems: "center",
     borderTopWidth: 1,
