@@ -27,6 +27,7 @@ export const meters = pgTable("meters", {
   meterNumber: text("meter_number").notNull(),
   category: text("category").notNull(),
   subscriberName: text("subscriber_name").notNull(),
+  address: text("address").default(""),
   record: text("record").notNull(),
   block: text("block").notNull(),
   property: text("property").notNull(),
@@ -58,6 +59,9 @@ export const readings = pgTable("readings", {
   notes: text("notes"),
   skipReason: text("skip_reason"),
   isCompleted: boolean("is_completed").default(true).notNull(),
+  readingDate: timestamp("reading_date").defaultNow().notNull(),
+  latitude: numeric("latitude", { precision: 10, scale: 7 }),
+  longitude: numeric("longitude", { precision: 10, scale: 7 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -84,6 +88,7 @@ export const insertMeterSchema = createInsertSchema(meters).pick({
   meterNumber: true,
   category: true,
   subscriberName: true,
+  address: true,
   record: true,
   block: true,
   property: true,
@@ -102,6 +107,9 @@ export const insertReadingSchema = createInsertSchema(readings).pick({
   photoPath: true,
   notes: true,
   skipReason: true,
+  readingDate: true,
+  latitude: true,
+  longitude: true,
 });
 
 export type InsertReader = z.infer<typeof insertReaderSchema>;

@@ -18,6 +18,7 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
+import * as Location from "expo-location";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import Animated, {
   FadeIn,
@@ -73,13 +74,15 @@ export default function ReadingEntryScreen() {
   }));
 
   const mutation = useMutation({
-    mutationFn: async (data: { newReading: number; photoPath?: string; notes?: string }) => {
+    mutationFn: async (data: { newReading: number; photoPath?: string; notes?: string; latitude?: number; longitude?: number }) => {
       const response = await apiRequest("POST", "/api/readings", {
         meterId: meter.id,
         readerId: meter.readerId,
         newReading: data.newReading,
         photoPath: data.photoPath,
         notes: data.notes,
+        latitude: data.latitude?.toString(),
+        longitude: data.longitude?.toString(),
       });
       return response.json();
     },
@@ -101,11 +104,13 @@ export default function ReadingEntryScreen() {
   });
 
   const skipMutation = useMutation({
-    mutationFn: async (data: { skipReason: string }) => {
+    mutationFn: async (data: { skipReason: string; latitude?: number; longitude?: number }) => {
       const response = await apiRequest("POST", "/api/readings", {
         meterId: meter.id,
         readerId: meter.readerId,
         skipReason: data.skipReason,
+        latitude: data.latitude?.toString(),
+        longitude: data.longitude?.toString(),
       });
       return response.json();
     },
@@ -174,7 +179,24 @@ export default function ReadingEntryScreen() {
       return;
     }
     setShowSkipModal(false);
-    skipMutation.mutate({ skipReason: reasonLabel });
+
+    let latitude: number | undefined;
+    let longitude: number | undefined;
+
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === "granted") {
+        const location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+        });
+        latitude = location.coords.latitude;
+        longitude = location.coords.longitude;
+      }
+    } catch (error) {
+      console.log("Could not get location:", error);
+    }
+
+    skipMutation.mutate({ skipReason: reasonLabel, latitude, longitude });
   };
 
   const formatDate = (date: Date | string) => {
@@ -251,10 +273,28 @@ export default function ReadingEntryScreen() {
       ? `${meter.sequence}_${meter.accountNumber}.jpg`
       : undefined;
 
+    let latitude: number | undefined;
+    let longitude: number | undefined;
+
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === "granted") {
+        const location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+        });
+        latitude = location.coords.latitude;
+        longitude = location.coords.longitude;
+      }
+    } catch (error) {
+      console.log("Could not get location:", error);
+    }
+
     mutation.mutate({
       newReading: readingValue,
       photoPath: photoFileName,
       notes: notes.trim() || undefined,
+      latitude,
+      longitude,
     });
   };
 

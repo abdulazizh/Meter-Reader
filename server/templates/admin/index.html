@@ -494,6 +494,7 @@
             <th>رقم الحساب</th>
             <th>رقم المقياس</th>
             <th>اسم المشترك</th>
+            <th>العنوان</th>
             <th>الصنف</th>
             <th>القارئ</th>
             <th>الحالة</th>
@@ -527,7 +528,8 @@
             <th>القراءة السابقة</th>
             <th>القراءة الجديدة</th>
             <th>سبب التخطي</th>
-            <th>التاريخ</th>
+            <th>تاريخ القراءة</th>
+            <th>الموقع</th>
             <th>الملاحظات</th>
           </tr>
         </thead>
@@ -660,6 +662,10 @@
           <label>اسم المشترك</label>
           <input type="text" id="meter-subscriberName" required>
         </div>
+        <div class="form-group">
+          <label>العنوان</label>
+          <input type="text" id="meter-address" placeholder="العنوان الكامل">
+        </div>
         <div class="form-row">
           <div class="form-group">
             <label>السجل</label>
@@ -787,6 +793,7 @@
             <td>${meter.accountNumber}</td>
             <td>${meter.meterNumber}</td>
             <td>${meter.subscriberName}</td>
+            <td>${meter.address || '-'}</td>
             <td>${meter.category}</td>
             <td>${reader?.displayName || '-'}</td>
             <td><span class="badge ${hasReading ? 'badge-success' : 'badge-warning'}">${hasReading ? 'تم القراءة' : 'لم تتم القراءة'}</span></td>
@@ -804,6 +811,11 @@
       const filteredReadings = filterReadingsData();
       tbody.innerHTML = filteredReadings.map(reading => {
         const meter = meters.find(m => m.id === reading.meterId);
+        const readingDate = reading.readingDate ? new Date(reading.readingDate).toLocaleDateString('ar-IQ') : new Date(reading.createdAt).toLocaleDateString('ar-IQ');
+        const hasLocation = reading.latitude && reading.longitude;
+        const locationLink = hasLocation ? 
+          `<a href="https://www.google.com/maps?q=${reading.latitude},${reading.longitude}" target="_blank" style="color: #1e5799;">عرض الخريطة</a>` : 
+          '-';
         return `
           <tr>
             <td>${meter?.accountNumber || '-'}</td>
@@ -811,7 +823,8 @@
             <td>${meter?.previousReading?.toLocaleString('ar-IQ') || '-'}</td>
             <td>${reading.newReading !== null ? reading.newReading.toLocaleString('ar-IQ') : '-'}</td>
             <td>${reading.skipReason || '-'}</td>
-            <td>${new Date(reading.createdAt).toLocaleDateString('ar-IQ')}</td>
+            <td>${readingDate}</td>
+            <td>${locationLink}</td>
             <td>${reading.notes || '-'}</td>
           </tr>
         `;
@@ -934,6 +947,7 @@
       document.getElementById('meter-sequence').value = meter.sequence;
       document.getElementById('meter-category').value = meter.category;
       document.getElementById('meter-subscriberName').value = meter.subscriberName;
+      document.getElementById('meter-address').value = meter.address || '';
       document.getElementById('meter-record').value = meter.record;
       document.getElementById('meter-block').value = meter.block;
       document.getElementById('meter-property').value = meter.property;
@@ -956,6 +970,7 @@
         sequence: document.getElementById('meter-sequence').value,
         category: document.getElementById('meter-category').value,
         subscriberName: document.getElementById('meter-subscriberName').value,
+        address: document.getElementById('meter-address').value || '',
         record: document.getElementById('meter-record').value,
         block: document.getElementById('meter-block').value,
         property: document.getElementById('meter-property').value,
