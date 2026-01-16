@@ -256,6 +256,12 @@ export default function ReadingEntryScreen() {
       return;
     }
 
+    if (!photoUri) {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      Alert.alert("تنبيه", "يجب التقاط صورة للمقياس قبل حفظ القراءة");
+      return;
+    }
+
     const readingValue = parseInt(newReading, 10);
     if (isNaN(readingValue)) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
@@ -265,7 +271,7 @@ export default function ReadingEntryScreen() {
 
     if (readingValue < meter.previousReading) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      Alert.alert("تنبيه", "القراءة الجديدة يجب أن تكون أكبر من أو تساوي القراءة السابقة");
+      Alert.alert("تنبيه", "لا يمكن إدخال قراءة أقل من القراءة السابقة");
       return;
     }
 
@@ -298,7 +304,7 @@ export default function ReadingEntryScreen() {
     });
   };
 
-  const canSave = newReading.trim().length > 0;
+  const canSave = newReading.trim().length > 0 && photoUri !== null;
 
   if (showCamera) {
     return (
