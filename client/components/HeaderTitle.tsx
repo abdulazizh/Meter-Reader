@@ -1,6 +1,5 @@
 import React from "react";
 import { View, StyleSheet, Image } from "react-native";
-
 import { ThemedText } from "@/components/ThemedText";
 import { Spacing } from "@/constants/theme";
 
@@ -25,15 +24,17 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "flex-start",
+    justifyContent: "center",
   },
   icon: {
-    width: 28,
-    height: 28,
-    marginRight: Spacing.sm,
+    width: 32,
+    height: 32,
+    marginLeft: Spacing.sm,
+    borderRadius: 8,
   },
   title: {
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: "600",
+    fontFamily: "Cairo_600SemiBold",
   },
 });

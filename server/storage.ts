@@ -1,38 +1,120 @@
-import { type User, type InsertUser } from "@shared/schema";
-import { randomUUID } from "crypto";
-
-// modify the interface with any CRUD methods
-// you might need
+import {
+  readers,
+  meters,
+  readings,
+  type Reader,
+  type InsertReader,
+  type Meter,
+  type InsertMeter,
+  type Reading,
+  type InsertReading,
+  type MeterWithReading,
+} from "@shared/schema";
+import { db } from "./db";
+import { eq, desc, and } from "drizzle-orm";
 
 export interface IStorage {
-  getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
+  getReader(id: string): Promise<Reader | undefined>;
+  getReaderByUsername(username: string): Promise<Reader | undefined>;
+  createReader(reader: InsertReader): Promise<Reader>;
+  
+  getMetersByReaderId(readerId: string): Promise<MeterWithReading[]>;
+  getMeterById(id: string): Promise<Meter | undefined>;
+  createMeter(meter: InsertMeter): Promise<Meter>;
+  
+  getReadingsByMeterId(meterId: string): Promise<Reading[]>;
+  getLatestReadingByMeterId(meterId: string): Promise<Reading | undefined>;
+  createReading(reading: InsertReading): Promise<Reading>;
+  updateMeterAfterReading(meterId: string, newReading: number): Promise<void>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<string, User>;
-
-  constructor() {
-    this.users = new Map();
+export class DatabaseStorage implements IStorage {
+  async getReader(id: string): Promise<Reader | undefined> {
+    const [reader] = await db.select().from(readers).where(eq(readers.id, id));
+    return reader || undefined;
   }
 
-  async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
+  async getReaderByUsername(username: string): Promise<Reader | undefined> {
+    const [reader] = await db.select().from(readers).where(eq(readers.username, username));
+    return reader || undefined;
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+  async createReader(insertReader: InsertReader): Promise<Reader> {
+    const [reader] = await db
+      .insert(readers)
+      .values(insertReader)
+      .returning();
+    return reader;
   }
 
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
-    return user;
+  async getMetersByReaderId(readerId: string): Promise<MeterWithReading[]> {
+    const metersList = await db
+      .select()
+      .from(meters)
+      .where(eq(meters.readerId, readerId))
+      .orderBy(meters.sequence);
+
+    const metersWithReadings: MeterWithReading[] = [];
+    
+    for (const meter of metersList) {
+      const latestReading = await this.getLatestReadingByMeterId(meter.id);
+      metersWithReadings.push({
+        ...meter,
+        latestReading: latestReading || null,
+      });
+    }
+
+    return metersWithReadings;
+  }
+
+  async getMeterById(id: string): Promise<Meter | undefined> {
+    const [meter] = await db.select().from(meters).where(eq(meters.id, id));
+    return meter || undefined;
+  }
+
+  async createMeter(insertMeter: InsertMeter): Promise<Meter> {
+    const [meter] = await db
+      .insert(meters)
+      .values(insertMeter)
+      .returning();
+    return meter;
+  }
+
+  async getReadingsByMeterId(meterId: string): Promise<Reading[]> {
+    return db
+      .select()
+      .from(readings)
+      .where(eq(readings.meterId, meterId))
+      .orderBy(desc(readings.createdAt));
+  }
+
+  async getLatestReadingByMeterId(meterId: string): Promise<Reading | undefined> {
+    const [reading] = await db
+      .select()
+      .from(readings)
+      .where(eq(readings.meterId, meterId))
+      .orderBy(desc(readings.createdAt))
+      .limit(1);
+    return reading || undefined;
+  }
+
+  async createReading(insertReading: InsertReading): Promise<Reading> {
+    const [reading] = await db
+      .insert(readings)
+      .values(insertReading)
+      .returning();
+    return reading;
+  }
+
+  async updateMeterAfterReading(meterId: string, newReading: number): Promise<void> {
+    await db
+      .update(meters)
+      .set({
+        previousReading: newReading,
+        previousReadingDate: new Date(),
+      })
+      .where(eq(meters.id, meterId));
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();

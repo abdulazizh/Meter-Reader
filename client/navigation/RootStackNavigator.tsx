@@ -1,32 +1,44 @@
 import React from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import MainTabNavigator from "@/navigation/MainTabNavigator";
-import ModalScreen from "@/screens/ModalScreen";
 import { useScreenOptions } from "@/hooks/useScreenOptions";
+import { HeaderTitle } from "@/components/HeaderTitle";
+import MetersListScreen from "@/screens/MetersListScreen";
+import ReadingEntryScreen from "@/screens/ReadingEntryScreen";
+import SettingsScreen from "@/screens/SettingsScreen";
+import type { MeterWithReading } from "@shared/schema";
 
 export type RootStackParamList = {
-  Main: undefined;
-  Modal: undefined;
+  MetersList: undefined;
+  ReadingEntry: { meter: MeterWithReading };
+  Settings: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function RootStackNavigator() {
-  const screenOptions = useScreenOptions();
+  const screenOptions = useScreenOptions({ transparent: false });
 
   return (
     <Stack.Navigator screenOptions={screenOptions}>
       <Stack.Screen
-        name="Main"
-        component={MainTabNavigator}
-        options={{ headerShown: false }}
+        name="MetersList"
+        component={MetersListScreen}
+        options={{
+          headerTitle: () => <HeaderTitle title="قراءات العدادات" />,
+        }}
       />
       <Stack.Screen
-        name="Modal"
-        component={ModalScreen}
+        name="ReadingEntry"
+        component={ReadingEntryScreen}
         options={{
-          presentation: "modal",
-          headerTitle: "Modal",
+          headerTitle: "إدخال القراءة",
+        }}
+      />
+      <Stack.Screen
+        name="Settings"
+        component={SettingsScreen}
+        options={{
+          headerTitle: "الإعدادات",
         }}
       />
     </Stack.Navigator>
