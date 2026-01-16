@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>لوحة تحكم المسؤول - قراءة العدادات</title>
+  <title>لوحة تحكم المسؤول - قراءة المشتركين</title>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
   <style>
     * {
@@ -423,7 +423,7 @@
       </div>
       <div class="stat-item">
         <div class="stat-value" id="totalMeters">0</div>
-        <div class="stat-label">العدادات</div>
+        <div class="stat-label">المشتركين</div>
       </div>
       <div class="stat-item">
         <div class="stat-value" id="totalReadings">0</div>
@@ -438,7 +438,7 @@
 
     <div class="tabs">
       <button class="tab active" data-tab="readers">القراء</button>
-      <button class="tab" data-tab="meters">العدادات</button>
+      <button class="tab" data-tab="meters">المشتركين</button>
       <button class="tab" data-tab="readings">القراءات</button>
       <button class="tab" data-tab="import">رفع البيانات</button>
       <button class="tab" data-tab="export">تصدير البيانات</button>
@@ -462,7 +462,7 @@
             <th>المعرف</th>
             <th>اسم المستخدم</th>
             <th>الاسم الظاهر</th>
-            <th>عدد العدادات</th>
+            <th>عدد المشتركين</th>
             <th>الإجراءات</th>
           </tr>
         </thead>
@@ -473,7 +473,7 @@
     <!-- Meters Panel -->
     <div class="panel" id="meters-panel">
       <div class="panel-header">
-        <h2 class="panel-title">إدارة العدادات</h2>
+        <h2 class="panel-title">إدارة المشتركين</h2>
         <button class="btn btn-primary" onclick="showAddMeterModal()">
           + إضافة عداد جديد
         </button>
@@ -575,7 +575,7 @@
           <select id="export-type">
             <option value="all">جميع البيانات</option>
             <option value="readers">القراء فقط</option>
-            <option value="meters">العدادات فقط</option>
+            <option value="meters">المشتركين فقط</option>
             <option value="readings">القراءات فقط</option>
           </select>
         </div>
@@ -749,7 +749,7 @@
         meters = await response.json();
         renderMeters();
       } catch (error) {
-        showError('فشل تحميل العدادات');
+        showError('فشل تحميل المشتركين');
       }
       document.getElementById('meters-loading').classList.remove('show');
     }

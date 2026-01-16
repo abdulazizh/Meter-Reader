@@ -165,10 +165,10 @@ function EmptyState() {
         resizeMode="contain"
       />
       <ThemedText type="h4" style={styles.emptyTitle}>
-        لا توجد عدادات مخصصة
+        لا يوجد مشتركين مخصصين
       </ThemedText>
       <ThemedText style={[styles.emptySubtitle, { color: theme.textSecondary }]}>
-        ستظهر العدادات المخصصة لك هنا
+        سيظهر المشتركين المخصصين لك هنا
       </ThemedText>
     </View>
   );

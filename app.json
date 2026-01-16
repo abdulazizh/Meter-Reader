@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "قراءات العدادات",
+    "name": "قراءات المشتركين",
     "slug": "meter-reader-iraq",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -44,13 +44,13 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "السماح بالوصول للكاميرا لالتقاط صور العدادات"
+          "cameraPermission": "السماح بالوصول للكاميرا لالتقاط صور المشتركين"
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "السماح بالوصول للصور لاختيار صور العدادات"
+          "photosPermission": "السماح بالوصول للصور لاختيار صور المشتركين"
         }
       ]
     ],

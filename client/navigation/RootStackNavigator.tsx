@@ -24,7 +24,7 @@ export default function RootStackNavigator() {
         name="MetersList"
         component={MetersListScreen}
         options={{
-          headerTitle: () => <HeaderTitle title="قراءات العدادات" />,
+          headerTitle: () => <HeaderTitle title="قراءات المشتركين" />,
         }}
       />
       <Stack.Screen

@@ -28,7 +28,7 @@
 
 **Layout**:
 - Header: Default navigation header (NON-transparent)
-  - Title: "قراءات العدادات" (Meter Readings)
+  - Title: "قراءات المشتركين" (Subscriber Readings)
   - Right button: Settings icon
   - Search bar below header
 - Main content: ScrollView with FlatList of meter cards
@@ -45,7 +45,7 @@
   - رقم المقياس (Meter Number)
   - الصنف (Class)
   - القراءة السابقة (Previous Reading) + التاريخ (Date)
-- Empty state: "لا توجد عدادات مخصصة" with illustration
+- Empty state: "لا يوجد مشتركين مخصصين" with illustration
 
 ### 3.2 Reading Entry Screen
 **Purpose**: Input new meter reading, capture photo, and add notes

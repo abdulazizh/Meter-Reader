@@ -157,7 +157,7 @@ export default function SettingsScreen() {
         />
         <View style={styles.profileInfo}>
           <ThemedText type="h3" style={styles.profileName}>
-            {readerProfile?.displayName || "قارئ العدادات"}
+            {readerProfile?.displayName || "قارئ المشتركين"}
           </ThemedText>
           <ThemedText style={[styles.profileId, { color: theme.textSecondary }]}>
             {readerProfile?.username || "جاري التحميل..."}
@@ -172,7 +172,7 @@ export default function SettingsScreen() {
               {readerProfile.stats.totalMeters}
             </ThemedText>
             <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>
-              إجمالي العدادات
+              إجمالي المشتركين
             </ThemedText>
           </View>
           <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
