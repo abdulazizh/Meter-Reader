@@ -492,10 +492,16 @@
         <thead>
           <tr>
             <th>رقم الحساب</th>
+            <th>التسلسل</th>
             <th>رقم المقياس</th>
             <th>اسم المشترك</th>
             <th>العنوان</th>
             <th>الصنف</th>
+            <th>القراءة السابقة</th>
+            <th>تاريخ القراءة</th>
+            <th>المبلغ الحالي</th>
+            <th>الديون</th>
+            <th>المجموع</th>
             <th>القارئ</th>
             <th>الحالة</th>
             <th>الإجراءات</th>
@@ -525,11 +531,14 @@
           <tr>
             <th>رقم الحساب</th>
             <th>اسم المشترك</th>
+            <th>القارئ</th>
             <th>القراءة السابقة</th>
             <th>القراءة الجديدة</th>
+            <th>الفرق</th>
             <th>سبب التخطي</th>
             <th>تاريخ القراءة</th>
             <th>الموقع</th>
+            <th>الصورة</th>
             <th>الملاحظات</th>
           </tr>
         </thead>
@@ -709,6 +718,17 @@
     </div>
   </div>
 
+  <!-- Meter Details Modal -->
+  <div class="modal" id="meter-details-modal">
+    <div class="modal-content" style="max-width: 800px;">
+      <div class="modal-header">
+        <h3 class="modal-title">تفاصيل المشترك</h3>
+        <button class="modal-close" onclick="closeModal('meter-details-modal')">&times;</button>
+      </div>
+      <div id="meter-details-content"></div>
+    </div>
+  </div>
+
   <script>
     let readers = [];
     let meters = [];
@@ -788,16 +808,27 @@
       tbody.innerHTML = filteredMeters.map(meter => {
         const reader = readers.find(r => r.id === meter.readerId);
         const hasReading = meter.latestReading !== null;
+        const prevDate = meter.previousReadingDate ? new Date(meter.previousReadingDate).toLocaleDateString('ar-IQ') : '-';
+        const currentAmount = parseFloat(meter.currentAmount || 0).toLocaleString('ar-IQ');
+        const debts = parseFloat(meter.debts || 0).toLocaleString('ar-IQ');
+        const totalAmount = parseFloat(meter.totalAmount || 0).toLocaleString('ar-IQ');
         return `
           <tr>
             <td>${meter.accountNumber}</td>
+            <td>${meter.sequence}</td>
             <td>${meter.meterNumber}</td>
             <td>${meter.subscriberName}</td>
             <td>${meter.address || '-'}</td>
             <td>${meter.category}</td>
+            <td>${meter.previousReading?.toLocaleString('ar-IQ') || '-'}</td>
+            <td>${prevDate}</td>
+            <td>${currentAmount} د.ع</td>
+            <td style="color: ${parseFloat(meter.debts || 0) > 0 ? '#dc3545' : 'inherit'}">${debts} د.ع</td>
+            <td style="font-weight: bold; color: #1e5799">${totalAmount} د.ع</td>
             <td>${reader?.displayName || '-'}</td>
             <td><span class="badge ${hasReading ? 'badge-success' : 'badge-warning'}">${hasReading ? 'تم القراءة' : 'لم تتم القراءة'}</span></td>
             <td class="actions">
+              <button class="btn btn-sm btn-primary" onclick="viewMeterDetails('${meter.id}')">عرض</button>
               <button class="btn btn-sm btn-secondary" onclick="editMeter('${meter.id}')">تعديل</button>
               <button class="btn btn-sm btn-danger" onclick="deleteMeter('${meter.id}')">حذف</button>
             </td>
@@ -811,20 +842,31 @@
       const filteredReadings = filterReadingsData();
       tbody.innerHTML = filteredReadings.map(reading => {
         const meter = meters.find(m => m.id === reading.meterId);
+        const reader = readers.find(r => r.id === reading.readerId);
         const readingDate = reading.readingDate ? new Date(reading.readingDate).toLocaleDateString('ar-IQ') : new Date(reading.createdAt).toLocaleDateString('ar-IQ');
+        const readingTime = reading.readingDate ? new Date(reading.readingDate).toLocaleTimeString('ar-IQ', {hour: '2-digit', minute: '2-digit'}) : '';
         const hasLocation = reading.latitude && reading.longitude;
         const locationLink = hasLocation ? 
           `<a href="https://www.google.com/maps?q=${reading.latitude},${reading.longitude}" target="_blank" style="color: #1e5799;">عرض الخريطة</a>` : 
           '-';
+        const prevReading = meter?.previousReading || 0;
+        const newReading = reading.newReading || 0;
+        const difference = reading.newReading !== null ? (newReading - prevReading) : '-';
+        const photoLink = reading.photoPath ? 
+          `<span class="badge badge-success" title="${reading.photoPath}">متوفرة</span>` : 
+          `<span class="badge badge-warning">غير متوفرة</span>`;
         return `
           <tr>
             <td>${meter?.accountNumber || '-'}</td>
             <td>${meter?.subscriberName || '-'}</td>
+            <td>${reader?.displayName || '-'}</td>
             <td>${meter?.previousReading?.toLocaleString('ar-IQ') || '-'}</td>
-            <td>${reading.newReading !== null ? reading.newReading.toLocaleString('ar-IQ') : '-'}</td>
-            <td>${reading.skipReason || '-'}</td>
-            <td>${readingDate}</td>
+            <td style="font-weight: bold; color: #28a745">${reading.newReading !== null ? reading.newReading.toLocaleString('ar-IQ') : '-'}</td>
+            <td style="color: ${difference > 0 ? '#1e5799' : '#dc3545'}">${typeof difference === 'number' ? difference.toLocaleString('ar-IQ') : difference}</td>
+            <td>${reading.skipReason ? `<span class="badge badge-warning">${reading.skipReason}</span>` : '-'}</td>
+            <td>${readingDate} ${readingTime}</td>
             <td>${locationLink}</td>
+            <td>${photoLink}</td>
             <td>${reading.notes || '-'}</td>
           </tr>
         `;
@@ -1009,6 +1051,78 @@
       } catch (error) {
         showError('فشل حذف العداد');
       }
+    }
+
+    function viewMeterDetails(id) {
+      const meter = meters.find(m => m.id === id);
+      if (!meter) return;
+      
+      const reader = readers.find(r => r.id === meter.readerId);
+      const meterReadings = allReadings.filter(r => r.meterId === id);
+      const prevDate = meter.previousReadingDate ? new Date(meter.previousReadingDate).toLocaleDateString('ar-IQ') : '-';
+      
+      let readingsHtml = '';
+      if (meterReadings.length > 0) {
+        readingsHtml = `
+          <h4 style="margin: 20px 0 10px; color: #1a1a2e;">سجل القراءات (${meterReadings.length})</h4>
+          <table style="width: 100%; font-size: 14px;">
+            <thead>
+              <tr style="background: #f8f9fa;">
+                <th style="padding: 8px;">التاريخ</th>
+                <th style="padding: 8px;">القراءة</th>
+                <th style="padding: 8px;">سبب التخطي</th>
+                <th style="padding: 8px;">الموقع</th>
+                <th style="padding: 8px;">الصورة</th>
+                <th style="padding: 8px;">ملاحظات</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${meterReadings.map(r => {
+                const rDate = r.readingDate ? new Date(r.readingDate).toLocaleDateString('ar-IQ') : new Date(r.createdAt).toLocaleDateString('ar-IQ');
+                const rTime = r.readingDate ? new Date(r.readingDate).toLocaleTimeString('ar-IQ', {hour: '2-digit', minute: '2-digit'}) : '';
+                const hasLoc = r.latitude && r.longitude;
+                const locLink = hasLoc ? 
+                  '<a href="https://www.google.com/maps?q=' + r.latitude + ',' + r.longitude + '" target="_blank" style="color: #1e5799;">خريطة</a>' : '-';
+                const photoStatus = r.photoPath ? '<span class="badge badge-success">متوفرة</span>' : '<span class="badge badge-warning">لا</span>';
+                return '<tr><td style="padding: 8px;">' + rDate + ' ' + rTime + '</td><td style="padding: 8px; font-weight: bold;">' + (r.newReading !== null ? r.newReading.toLocaleString('ar-IQ') : '-') + '</td><td style="padding: 8px;">' + (r.skipReason || '-') + '</td><td style="padding: 8px;">' + locLink + '</td><td style="padding: 8px;">' + photoStatus + '</td><td style="padding: 8px;">' + (r.notes || '-') + '</td></tr>';
+              }).join('')}
+            </tbody>
+          </table>
+        `;
+      } else {
+        readingsHtml = '<p style="color: #999; margin-top: 20px;">لا توجد قراءات مسجلة لهذا المشترك</p>';
+      }
+      
+      document.getElementById('meter-details-content').innerHTML = `
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+          <div>
+            <h4 style="color: #1e5799; margin-bottom: 15px;">معلومات المشترك</h4>
+            <table style="width: 100%;">
+              <tr><td style="padding: 8px; color: #666;">رقم الحساب:</td><td style="padding: 8px; font-weight: bold;">${meter.accountNumber}</td></tr>
+              <tr><td style="padding: 8px; color: #666;">التسلسل:</td><td style="padding: 8px;">${meter.sequence}</td></tr>
+              <tr><td style="padding: 8px; color: #666;">اسم المشترك:</td><td style="padding: 8px; font-weight: bold;">${meter.subscriberName}</td></tr>
+              <tr><td style="padding: 8px; color: #666;">رقم المقياس:</td><td style="padding: 8px;">${meter.meterNumber}</td></tr>
+              <tr><td style="padding: 8px; color: #666;">الصنف:</td><td style="padding: 8px;">${meter.category}</td></tr>
+              <tr><td style="padding: 8px; color: #666;">العنوان:</td><td style="padding: 8px;">${meter.address || '-'}</td></tr>
+              <tr><td style="padding: 8px; color: #666;">السجل/البلوك/العقار:</td><td style="padding: 8px;">${meter.record}/${meter.block}/${meter.property}</td></tr>
+              <tr><td style="padding: 8px; color: #666;">القارئ المسؤول:</td><td style="padding: 8px;">${reader?.displayName || '-'}</td></tr>
+            </table>
+          </div>
+          <div>
+            <h4 style="color: #1e5799; margin-bottom: 15px;">معلومات القراءة والمبالغ</h4>
+            <table style="width: 100%;">
+              <tr><td style="padding: 8px; color: #666;">القراءة السابقة:</td><td style="padding: 8px; font-weight: bold; color: #1e5799;">${meter.previousReading?.toLocaleString('ar-IQ') || '-'}</td></tr>
+              <tr><td style="padding: 8px; color: #666;">تاريخ القراءة:</td><td style="padding: 8px;">${prevDate}</td></tr>
+              <tr><td style="padding: 8px; color: #666;">المبلغ الحالي:</td><td style="padding: 8px;">${parseFloat(meter.currentAmount || 0).toLocaleString('ar-IQ')} د.ع</td></tr>
+              <tr><td style="padding: 8px; color: #666;">الديون:</td><td style="padding: 8px; color: #dc3545;">${parseFloat(meter.debts || 0).toLocaleString('ar-IQ')} د.ع</td></tr>
+              <tr><td style="padding: 8px; color: #666; font-weight: bold;">المجموع:</td><td style="padding: 8px; font-weight: bold; color: #1e5799; font-size: 18px;">${parseFloat(meter.totalAmount || 0).toLocaleString('ar-IQ')} د.ع</td></tr>
+              <tr><td style="padding: 8px; color: #666;">الحالة:</td><td style="padding: 8px;"><span class="badge ${meter.latestReading ? 'badge-success' : 'badge-warning'}">${meter.latestReading ? 'تم القراءة' : 'لم تتم القراءة'}</span></td></tr>
+            </table>
+          </div>
+        </div>
+        ${readingsHtml}
+      `;
+      document.getElementById('meter-details-modal').classList.add('active');
     }
 
     function handleFileSelect(event) {
