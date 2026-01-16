@@ -31,10 +31,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/readings", async (req, res) => {
     try {
-      const { meterId, readerId, newReading, photoPath, notes } = req.body;
+      const { meterId, readerId, newReading, photoPath, notes, skipReason } = req.body;
 
-      if (!meterId || !readerId || newReading === undefined) {
+      if (!meterId || !readerId) {
         return res.status(400).json({ error: "Missing required fields" });
+      }
+
+      if (skipReason) {
+        const reading = await storage.createReading({
+          meterId,
+          readerId,
+          newReading: null,
+          photoPath: null,
+          notes: null,
+          skipReason,
+        });
+        res.status(201).json(reading);
+        return;
+      }
+
+      if (newReading === undefined || newReading === null) {
+        return res.status(400).json({ error: "Missing reading value" });
       }
 
       const reading = await storage.createReading({
@@ -43,6 +60,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         newReading: parseInt(newReading, 10),
         photoPath: photoPath || null,
         notes: notes || null,
+        skipReason: null,
       });
 
       await storage.updateMeterAfterReading(meterId, parseInt(newReading, 10));
@@ -223,6 +241,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               newReading: r.newReading,
               photoPath: r.photoPath,
               notes: r.notes,
+              skipReason: r.skipReason,
               createdAt: r.createdAt,
             })),
           };
