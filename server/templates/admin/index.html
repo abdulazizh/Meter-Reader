@@ -746,6 +746,8 @@
 
     async function loadData() {
       await Promise.all([loadReaders(), loadMeters(), loadReadings()]);
+      renderMeters();
+      renderReadings();
       updateStats();
     }
 
@@ -767,7 +769,6 @@
       try {
         const response = await fetch('/api/admin/meters');
         meters = await response.json();
-        renderMeters();
       } catch (error) {
         showError('فشل تحميل المشتركين');
       }
@@ -779,7 +780,6 @@
       try {
         const response = await fetch('/api/admin/readings');
         allReadings = await response.json();
-        renderReadings();
       } catch (error) {
         showError('فشل تحميل القراءات');
       }
