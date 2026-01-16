@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { storage } from "./storage";
 import path from "node:path";
+import * as XLSX from "xlsx";
 
 export function registerAdminRoutes(app: Express) {
   app.get("/admin", (req, res) => {
@@ -262,6 +263,101 @@ export function registerAdminRoutes(app: Express) {
     } catch (error) {
       console.error("Error exporting data:", error);
       res.status(500).json({ error: "Failed to export data" });
+    }
+  });
+
+  app.get("/api/admin/export-excel/:type", async (req, res) => {
+    try {
+      const { type } = req.params;
+      const { readerId } = req.query;
+      
+      const allReaders = await storage.getAllReaders();
+      const allMeters = await storage.getAllMeters();
+      
+      const workbook = XLSX.utils.book_new();
+      
+      if (type === "all" || type === "readers") {
+        const readersData = allReaders.map(r => ({
+          'اسم المستخدم': r.username,
+          'الاسم الكامل': r.displayName,
+          'تاريخ الإنشاء': r.createdAt ? new Date(r.createdAt).toLocaleDateString('ar-IQ') : '',
+        }));
+        const readersSheet = XLSX.utils.json_to_sheet(readersData);
+        XLSX.utils.book_append_sheet(workbook, readersSheet, 'القراء');
+      }
+      
+      if (type === "all" || type === "meters") {
+        let meters = allMeters;
+        if (readerId && typeof readerId === "string") {
+          meters = meters.filter(m => m.readerId === readerId);
+        }
+        const metersData = meters.map(m => {
+          const reader = allReaders.find(r => r.id === m.readerId);
+          return {
+            'رقم الحساب': m.accountNumber,
+            'التسلسل': m.sequence,
+            'رقم المقياس': m.meterNumber,
+            'الصنف': m.category,
+            'اسم المشترك': m.subscriberName,
+            'العنوان': m.address || '',
+            'السجل': m.record,
+            'البلوك': m.block,
+            'العقار': m.property,
+            'القراءة السابقة': m.previousReading,
+            'تاريخ القراءة السابقة': m.previousReadingDate ? new Date(m.previousReadingDate).toLocaleDateString('ar-IQ') : '',
+            'المبلغ الحالي': parseFloat(m.currentAmount as string || '0'),
+            'الديون': parseFloat(m.debts as string || '0'),
+            'المجموع': parseFloat(m.totalAmount as string || '0'),
+            'القارئ': reader?.displayName || '',
+          };
+        });
+        const metersSheet = XLSX.utils.json_to_sheet(metersData);
+        XLSX.utils.book_append_sheet(workbook, metersSheet, 'المشتركين');
+      }
+      
+      if (type === "all" || type === "readings") {
+        let readings = await storage.getAllReadings();
+        if (readerId && typeof readerId === "string") {
+          readings = readings.filter(r => r.readerId === readerId);
+        }
+        const readingsData = readings.map(r => {
+          const meter = allMeters.find(m => m.id === r.meterId);
+          const reader = allReaders.find(rd => rd.id === r.readerId);
+          const prevReading = meter?.previousReading || 0;
+          const newReading = r.newReading || 0;
+          const difference = r.newReading !== null ? (newReading - prevReading) : null;
+          return {
+            'رقم الحساب': meter?.accountNumber || '',
+            'اسم المشترك': meter?.subscriberName || '',
+            'رقم المقياس': meter?.meterNumber || '',
+            'الصنف': meter?.category || '',
+            'العنوان': meter?.address || '',
+            'القارئ': reader?.displayName || '',
+            'القراءة السابقة': meter?.previousReading || 0,
+            'القراءة الجديدة': r.newReading,
+            'الفرق': difference,
+            'سبب التخطي': r.skipReason || '',
+            'تاريخ القراءة': r.readingDate ? new Date(r.readingDate).toLocaleDateString('ar-IQ') + ' ' + new Date(r.readingDate).toLocaleTimeString('ar-IQ') : '',
+            'خط العرض': r.latitude ? parseFloat(r.latitude) : '',
+            'خط الطول': r.longitude ? parseFloat(r.longitude) : '',
+            'رابط الموقع': r.latitude && r.longitude ? `https://www.google.com/maps?q=${r.latitude},${r.longitude}` : '',
+            'الصورة': r.photoPath ? 'متوفرة' : 'غير متوفرة',
+            'مسار الصورة': r.photoPath || '',
+            'الملاحظات': r.notes || '',
+          };
+        });
+        const readingsSheet = XLSX.utils.json_to_sheet(readingsData);
+        XLSX.utils.book_append_sheet(workbook, readingsSheet, 'القراءات');
+      }
+      
+      const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+      
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename=export_${type}_${Date.now()}.xlsx`);
+      res.send(buffer);
+    } catch (error) {
+      console.error("Error exporting Excel:", error);
+      res.status(500).json({ error: "Failed to export Excel" });
     }
   });
 }

@@ -750,6 +750,7 @@
         <div class="form-group">
           <label>صيغة الملف</label>
           <select id="export-format">
+            <option value="excel">Excel (موصى به للعربية)</option>
             <option value="json">JSON</option>
             <option value="csv">CSV</option>
           </select>
@@ -1500,10 +1501,24 @@
       const format = document.getElementById('export-format').value;
       const readerId = document.getElementById('export-reader').value;
       
-      let url = `/api/admin/export/${type}?format=${format}`;
-      if (readerId) url += `&readerId=${readerId}`;
-      
       try {
+        if (format === 'excel') {
+          let url = `/api/admin/export-excel/${type}`;
+          if (readerId) url += `?readerId=${readerId}`;
+          
+          const response = await fetch(url);
+          const blob = await response.blob();
+          const link = document.createElement('a');
+          link.href = URL.createObjectURL(blob);
+          link.download = `export_${type}_${Date.now()}.xlsx`;
+          link.click();
+          showSuccess('تم تصدير البيانات بنجاح');
+          return;
+        }
+        
+        let url = `/api/admin/export/${type}?format=${format}`;
+        if (readerId) url += `&readerId=${readerId}`;
+        
         const response = await fetch(url);
         const data = await response.json();
         

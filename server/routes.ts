@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "node:http";
 import { storage } from "./storage";
 import type { InsertMeter } from "@shared/schema";
+import { Client } from "@replit/object-storage";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/meters/:readerId", async (req, res) => {
@@ -285,6 +286,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok" });
+  });
+
+  app.post("/api/upload-photo", async (req, res) => {
+    try {
+      const { photoBase64, fileName } = req.body;
+      
+      if (!photoBase64 || !fileName) {
+        return res.status(400).json({ error: "Missing photo data or filename" });
+      }
+      
+      const client = new Client();
+      
+      const base64Data = photoBase64.replace(/^data:image\/\w+;base64,/, '');
+      const buffer = Buffer.from(base64Data, 'base64');
+      
+      const photoPath = `photos/${fileName}`;
+      
+      const { ok, error } = await client.uploadFromBytes(photoPath, buffer);
+      
+      if (!ok) {
+        console.error("Upload error:", error);
+        return res.status(500).json({ error: "Failed to upload photo" });
+      }
+      
+      res.json({ 
+        success: true, 
+        photoPath,
+        message: "Photo uploaded successfully" 
+      });
+    } catch (error) {
+      console.error("Error uploading photo:", error);
+      res.status(500).json({ error: "Failed to upload photo" });
+    }
+  });
+
+  app.get("/api/photo/:path(*)", async (req, res) => {
+    try {
+      const photoPath = req.params.path;
+      const client = new Client();
+      
+      const result = await client.downloadAsBytes(photoPath);
+      
+      if (!result.ok) {
+        return res.status(404).json({ error: "Photo not found" });
+      }
+      
+      res.setHeader('Content-Type', 'image/jpeg');
+      res.send(result.value);
+    } catch (error) {
+      console.error("Error fetching photo:", error);
+      res.status(500).json({ error: "Failed to fetch photo" });
+    }
   });
 
   const httpServer = createServer(app);
