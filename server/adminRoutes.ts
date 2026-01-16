@@ -172,24 +172,51 @@ export function registerAdminRoutes(app: Express) {
       
       let data: unknown[] = [];
       
+      const allReaders = await storage.getAllReaders();
+      const allMeters = await storage.getAllMeters();
+      
       if (type === "all" || type === "readers") {
-        const readers = await storage.getAllReaders();
+        const readersExport = allReaders.map(r => ({
+          اسم_المستخدم: r.username,
+          الاسم_الكامل: r.displayName,
+          تاريخ_الإنشاء: r.createdAt,
+        }));
         if (type === "readers") {
-          data = readers;
+          data = readersExport;
         } else {
-          data.push(...readers.map(r => ({ ...r, _type: "reader" })));
+          data.push(...readersExport.map(r => ({ ...r, _type: "reader" })));
         }
       }
       
       if (type === "all" || type === "meters") {
-        let meters = await storage.getAllMeters();
+        let meters = allMeters;
         if (readerId && typeof readerId === "string") {
           meters = meters.filter(m => m.readerId === readerId);
         }
+        const metersExport = meters.map(m => {
+          const reader = allReaders.find(r => r.id === m.readerId);
+          return {
+            رقم_الحساب: m.accountNumber,
+            التسلسل: m.sequence,
+            رقم_المقياس: m.meterNumber,
+            الصنف: m.category,
+            اسم_المشترك: m.subscriberName,
+            العنوان: m.address || '',
+            السجل: m.record,
+            البلوك: m.block,
+            العقار: m.property,
+            القراءة_السابقة: m.previousReading,
+            تاريخ_القراءة_السابقة: m.previousReadingDate,
+            المبلغ_الحالي: m.currentAmount,
+            الديون: m.debts,
+            المجموع: m.totalAmount,
+            القارئ: reader?.displayName || '',
+          };
+        });
         if (type === "meters") {
-          data = meters;
+          data = metersExport;
         } else {
-          data.push(...meters.map(m => ({ ...m, _type: "meter" })));
+          data.push(...metersExport.map(m => ({ ...m, _type: "meter" })));
         }
       }
       
@@ -198,10 +225,36 @@ export function registerAdminRoutes(app: Express) {
         if (readerId && typeof readerId === "string") {
           readings = readings.filter(r => r.readerId === readerId);
         }
+        const readingsExport = readings.map(r => {
+          const meter = allMeters.find(m => m.id === r.meterId);
+          const reader = allReaders.find(rd => rd.id === r.readerId);
+          const prevReading = meter?.previousReading || 0;
+          const newReading = r.newReading || 0;
+          const difference = r.newReading !== null ? (newReading - prevReading) : null;
+          return {
+            رقم_الحساب: meter?.accountNumber || '',
+            اسم_المشترك: meter?.subscriberName || '',
+            رقم_المقياس: meter?.meterNumber || '',
+            الصنف: meter?.category || '',
+            العنوان: meter?.address || '',
+            القارئ: reader?.displayName || '',
+            القراءة_السابقة: meter?.previousReading || 0,
+            القراءة_الجديدة: r.newReading,
+            الفرق: difference,
+            سبب_التخطي: r.skipReason || '',
+            تاريخ_القراءة: r.readingDate,
+            خط_العرض: r.latitude || '',
+            خط_الطول: r.longitude || '',
+            رابط_الموقع: r.latitude && r.longitude ? `https://www.google.com/maps?q=${r.latitude},${r.longitude}` : '',
+            الصورة: r.photoPath ? 'متوفرة' : 'غير متوفرة',
+            مسار_الصورة: r.photoPath || '',
+            الملاحظات: r.notes || '',
+          };
+        });
         if (type === "readings") {
-          data = readings;
+          data = readingsExport;
         } else {
-          data.push(...readings.map(r => ({ ...r, _type: "reading" })));
+          data.push(...readingsExport.map(r => ({ ...r, _type: "reading" })));
         }
       }
       
