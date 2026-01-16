@@ -191,8 +191,93 @@
       color: #495057;
     }
     
+    th.sortable {
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.2s;
+    }
+    
+    th.sortable:hover {
+      background: #e9ecef;
+    }
+    
+    th.sortable::after {
+      content: ' ⇅';
+      opacity: 0.3;
+      font-size: 12px;
+    }
+    
+    th.sortable.asc::after {
+      content: ' ↑';
+      opacity: 1;
+    }
+    
+    th.sortable.desc::after {
+      content: ' ↓';
+      opacity: 1;
+    }
+    
     tr:hover {
       background: #f8f9fa;
+    }
+    
+    .filters-row {
+      display: flex;
+      gap: 15px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-bottom: 15px;
+      padding: 15px;
+      background: #f8f9fa;
+      border-radius: 8px;
+    }
+    
+    .filter-group {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    
+    .filter-group label {
+      font-size: 12px;
+      color: #666;
+      font-weight: 600;
+    }
+    
+    .filter-group input, .filter-group select {
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-family: 'Cairo', sans-serif;
+      font-size: 14px;
+      min-width: 150px;
+    }
+    
+    .filter-group input:focus, .filter-group select:focus {
+      outline: none;
+      border-color: #1e5799;
+    }
+    
+    .btn-reset-filters {
+      padding: 8px 16px;
+      background: #6c757d;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: 'Cairo', sans-serif;
+      font-size: 14px;
+      margin-top: 20px;
+    }
+    
+    .btn-reset-filters:hover {
+      background: #5a6268;
+    }
+    
+    .results-count {
+      font-size: 14px;
+      color: #666;
+      margin-top: 20px;
     }
     
     .modal {
@@ -478,12 +563,46 @@
           + إضافة عداد جديد
         </button>
       </div>
-      <div class="search-box">
-        <input type="text" id="meters-search" placeholder="البحث برقم الحساب أو اسم المشترك..." oninput="filterMeters()">
-        <select id="reader-filter" onchange="filterMeters()">
-          <option value="">جميع القراء</option>
-        </select>
+      <div class="filters-row">
+        <div class="filter-group">
+          <label>البحث</label>
+          <input type="text" id="meters-search" placeholder="رقم الحساب أو الاسم..." oninput="filterMeters()">
+        </div>
+        <div class="filter-group">
+          <label>القارئ</label>
+          <select id="reader-filter" onchange="filterMeters()">
+            <option value="">جميع القراء</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>الصنف</label>
+          <select id="meters-category-filter" onchange="filterMeters()">
+            <option value="">جميع الأصناف</option>
+            <option value="سكني">سكني</option>
+            <option value="تجاري">تجاري</option>
+            <option value="صناعي">صناعي</option>
+            <option value="حكومي">حكومي</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>الحالة</label>
+          <select id="meters-status-filter" onchange="filterMeters()">
+            <option value="">الكل</option>
+            <option value="read">تم القراءة</option>
+            <option value="unread">لم تتم القراءة</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>الديون</label>
+          <select id="meters-debts-filter" onchange="filterMeters()">
+            <option value="">الكل</option>
+            <option value="has">بديون</option>
+            <option value="none">بدون ديون</option>
+          </select>
+        </div>
+        <button class="btn-reset-filters" onclick="resetMetersFilters()">إعادة تعيين</button>
       </div>
+      <div class="results-count" id="meters-count"></div>
       <div class="loading" id="meters-loading">
         <div class="spinner"></div>
         <div>جاري التحميل...</div>
@@ -491,17 +610,17 @@
       <table id="meters-table">
         <thead>
           <tr>
-            <th>رقم الحساب</th>
-            <th>التسلسل</th>
+            <th class="sortable" data-sort="accountNumber">رقم الحساب</th>
+            <th class="sortable" data-sort="sequence">التسلسل</th>
             <th>رقم المقياس</th>
-            <th>اسم المشترك</th>
+            <th class="sortable" data-sort="subscriberName">اسم المشترك</th>
             <th>العنوان</th>
-            <th>الصنف</th>
-            <th>القراءة السابقة</th>
-            <th>تاريخ القراءة</th>
-            <th>المبلغ الحالي</th>
-            <th>الديون</th>
-            <th>المجموع</th>
+            <th class="sortable" data-sort="category">الصنف</th>
+            <th class="sortable" data-sort="previousReading">القراءة السابقة</th>
+            <th class="sortable" data-sort="previousReadingDate">تاريخ القراءة</th>
+            <th class="sortable" data-sort="currentAmount">المبلغ الحالي</th>
+            <th class="sortable" data-sort="debts">الديون</th>
+            <th class="sortable" data-sort="totalAmount">المجموع</th>
             <th>القارئ</th>
             <th>الحالة</th>
             <th>الإجراءات</th>
@@ -516,12 +635,52 @@
       <div class="panel-header">
         <h2 class="panel-title">القراءات المسجلة</h2>
       </div>
-      <div class="search-box">
-        <input type="text" id="readings-search" placeholder="البحث..." oninput="filterReadings()">
-        <select id="readings-reader-filter" onchange="filterReadings()">
-          <option value="">جميع القراء</option>
-        </select>
+      <div class="filters-row">
+        <div class="filter-group">
+          <label>البحث</label>
+          <input type="text" id="readings-search" placeholder="رقم الحساب أو الاسم..." oninput="filterReadings()">
+        </div>
+        <div class="filter-group">
+          <label>القارئ</label>
+          <select id="readings-reader-filter" onchange="filterReadings()">
+            <option value="">جميع القراء</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>النوع</label>
+          <select id="readings-type-filter" onchange="filterReadings()">
+            <option value="">الكل</option>
+            <option value="reading">قراءات</option>
+            <option value="skipped">تم التخطي</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>الصورة</label>
+          <select id="readings-photo-filter" onchange="filterReadings()">
+            <option value="">الكل</option>
+            <option value="has">متوفرة</option>
+            <option value="none">غير متوفرة</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>الموقع</label>
+          <select id="readings-location-filter" onchange="filterReadings()">
+            <option value="">الكل</option>
+            <option value="has">متوفر</option>
+            <option value="none">غير متوفر</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>من تاريخ</label>
+          <input type="date" id="readings-date-from" onchange="filterReadings()">
+        </div>
+        <div class="filter-group">
+          <label>إلى تاريخ</label>
+          <input type="date" id="readings-date-to" onchange="filterReadings()">
+        </div>
+        <button class="btn-reset-filters" onclick="resetReadingsFilters()">إعادة تعيين</button>
       </div>
+      <div class="results-count" id="readings-count"></div>
       <div class="loading" id="readings-loading">
         <div class="spinner"></div>
         <div>جاري التحميل...</div>
@@ -529,14 +688,14 @@
       <table id="readings-table">
         <thead>
           <tr>
-            <th>رقم الحساب</th>
-            <th>اسم المشترك</th>
-            <th>القارئ</th>
-            <th>القراءة السابقة</th>
-            <th>القراءة الجديدة</th>
-            <th>الفرق</th>
+            <th class="sortable" data-sort="accountNumber">رقم الحساب</th>
+            <th class="sortable" data-sort="subscriberName">اسم المشترك</th>
+            <th class="sortable" data-sort="readerName">القارئ</th>
+            <th class="sortable" data-sort="previousReading">القراءة السابقة</th>
+            <th class="sortable" data-sort="newReading">القراءة الجديدة</th>
+            <th class="sortable" data-sort="difference">الفرق</th>
             <th>سبب التخطي</th>
-            <th>تاريخ القراءة</th>
+            <th class="sortable" data-sort="readingDate">تاريخ القراءة</th>
             <th>الموقع</th>
             <th>الصورة</th>
             <th>الملاحظات</th>
@@ -873,33 +1032,181 @@
       }).join('');
     }
 
+    let metersSortField = 'sequence';
+    let metersSortDir = 'asc';
+    let readingsSortField = 'readingDate';
+    let readingsSortDir = 'desc';
+
     function filterMetersData() {
       const search = document.getElementById('meters-search').value.toLowerCase();
       const readerId = document.getElementById('reader-filter').value;
-      return meters.filter(m => {
+      const category = document.getElementById('meters-category-filter').value;
+      const status = document.getElementById('meters-status-filter').value;
+      const debtsFilter = document.getElementById('meters-debts-filter').value;
+      
+      let filtered = meters.filter(m => {
         const matchesSearch = !search || 
           m.accountNumber.toLowerCase().includes(search) ||
           m.subscriberName.toLowerCase().includes(search);
         const matchesReader = !readerId || m.readerId === readerId;
-        return matchesSearch && matchesReader;
+        const matchesCategory = !category || m.category === category;
+        const hasReading = m.latestReading !== null;
+        const matchesStatus = !status || 
+          (status === 'read' && hasReading) || 
+          (status === 'unread' && !hasReading);
+        const hasDebts = parseFloat(m.debts || 0) > 0;
+        const matchesDebts = !debtsFilter || 
+          (debtsFilter === 'has' && hasDebts) || 
+          (debtsFilter === 'none' && !hasDebts);
+        return matchesSearch && matchesReader && matchesCategory && matchesStatus && matchesDebts;
       });
+      
+      filtered.sort((a, b) => {
+        let valA = a[metersSortField];
+        let valB = b[metersSortField];
+        if (typeof valA === 'string') valA = valA.toLowerCase();
+        if (typeof valB === 'string') valB = valB.toLowerCase();
+        if (valA === null || valA === undefined) valA = '';
+        if (valB === null || valB === undefined) valB = '';
+        if (valA < valB) return metersSortDir === 'asc' ? -1 : 1;
+        if (valA > valB) return metersSortDir === 'asc' ? 1 : -1;
+        return 0;
+      });
+      
+      document.getElementById('meters-count').textContent = `عرض ${filtered.length} من ${meters.length} مشترك`;
+      return filtered;
     }
 
     function filterReadingsData() {
       const search = document.getElementById('readings-search').value.toLowerCase();
       const readerId = document.getElementById('readings-reader-filter').value;
-      return allReadings.filter(r => {
+      const typeFilter = document.getElementById('readings-type-filter').value;
+      const photoFilter = document.getElementById('readings-photo-filter').value;
+      const locationFilter = document.getElementById('readings-location-filter').value;
+      const dateFrom = document.getElementById('readings-date-from').value;
+      const dateTo = document.getElementById('readings-date-to').value;
+      
+      let filtered = allReadings.filter(r => {
         const meter = meters.find(m => m.id === r.meterId);
         const matchesSearch = !search || 
           meter?.accountNumber.toLowerCase().includes(search) ||
           meter?.subscriberName.toLowerCase().includes(search);
         const matchesReader = !readerId || r.readerId === readerId;
-        return matchesSearch && matchesReader;
+        const isSkipped = r.skipReason !== null && r.skipReason !== '';
+        const matchesType = !typeFilter || 
+          (typeFilter === 'reading' && !isSkipped) || 
+          (typeFilter === 'skipped' && isSkipped);
+        const hasPhoto = r.photoPath !== null && r.photoPath !== '';
+        const matchesPhoto = !photoFilter || 
+          (photoFilter === 'has' && hasPhoto) || 
+          (photoFilter === 'none' && !hasPhoto);
+        const hasLocation = r.latitude !== null && r.longitude !== null;
+        const matchesLocation = !locationFilter || 
+          (locationFilter === 'has' && hasLocation) || 
+          (locationFilter === 'none' && !hasLocation);
+        const readingDate = new Date(r.readingDate || r.createdAt);
+        const matchesDateFrom = !dateFrom || readingDate >= new Date(dateFrom);
+        const matchesDateTo = !dateTo || readingDate <= new Date(dateTo + 'T23:59:59');
+        return matchesSearch && matchesReader && matchesType && matchesPhoto && matchesLocation && matchesDateFrom && matchesDateTo;
       });
+      
+      filtered.sort((a, b) => {
+        const meterA = meters.find(m => m.id === a.meterId);
+        const meterB = meters.find(m => m.id === b.meterId);
+        const readerA = readers.find(r => r.id === a.readerId);
+        const readerB = readers.find(r => r.id === b.readerId);
+        
+        let valA, valB;
+        switch(readingsSortField) {
+          case 'accountNumber': valA = meterA?.accountNumber || ''; valB = meterB?.accountNumber || ''; break;
+          case 'subscriberName': valA = meterA?.subscriberName || ''; valB = meterB?.subscriberName || ''; break;
+          case 'readerName': valA = readerA?.displayName || ''; valB = readerB?.displayName || ''; break;
+          case 'previousReading': valA = meterA?.previousReading || 0; valB = meterB?.previousReading || 0; break;
+          case 'newReading': valA = a.newReading || 0; valB = b.newReading || 0; break;
+          case 'difference': 
+            valA = a.newReading !== null ? (a.newReading - (meterA?.previousReading || 0)) : 0;
+            valB = b.newReading !== null ? (b.newReading - (meterB?.previousReading || 0)) : 0;
+            break;
+          case 'readingDate': valA = new Date(a.readingDate || a.createdAt); valB = new Date(b.readingDate || b.createdAt); break;
+          default: valA = a[readingsSortField]; valB = b[readingsSortField];
+        }
+        
+        if (typeof valA === 'string') valA = valA.toLowerCase();
+        if (typeof valB === 'string') valB = valB.toLowerCase();
+        if (valA < valB) return readingsSortDir === 'asc' ? -1 : 1;
+        if (valA > valB) return readingsSortDir === 'asc' ? 1 : -1;
+        return 0;
+      });
+      
+      document.getElementById('readings-count').textContent = `عرض ${filtered.length} من ${allReadings.length} قراءة`;
+      return filtered;
     }
 
     function filterMeters() { renderMeters(); }
     function filterReadings() { renderReadings(); }
+    
+    function resetMetersFilters() {
+      document.getElementById('meters-search').value = '';
+      document.getElementById('reader-filter').value = '';
+      document.getElementById('meters-category-filter').value = '';
+      document.getElementById('meters-status-filter').value = '';
+      document.getElementById('meters-debts-filter').value = '';
+      metersSortField = 'sequence';
+      metersSortDir = 'asc';
+      updateSortIndicators('meters-table', metersSortField, metersSortDir);
+      renderMeters();
+    }
+    
+    function resetReadingsFilters() {
+      document.getElementById('readings-search').value = '';
+      document.getElementById('readings-reader-filter').value = '';
+      document.getElementById('readings-type-filter').value = '';
+      document.getElementById('readings-photo-filter').value = '';
+      document.getElementById('readings-location-filter').value = '';
+      document.getElementById('readings-date-from').value = '';
+      document.getElementById('readings-date-to').value = '';
+      readingsSortField = 'readingDate';
+      readingsSortDir = 'desc';
+      updateSortIndicators('readings-table', readingsSortField, readingsSortDir);
+      renderReadings();
+    }
+    
+    function updateSortIndicators(tableId, field, dir) {
+      const table = document.getElementById(tableId);
+      table.querySelectorAll('th.sortable').forEach(th => {
+        th.classList.remove('asc', 'desc');
+        if (th.dataset.sort === field) {
+          th.classList.add(dir);
+        }
+      });
+    }
+    
+    document.addEventListener('click', function(e) {
+      if (e.target.classList.contains('sortable')) {
+        const field = e.target.dataset.sort;
+        const table = e.target.closest('table');
+        
+        if (table.id === 'meters-table') {
+          if (metersSortField === field) {
+            metersSortDir = metersSortDir === 'asc' ? 'desc' : 'asc';
+          } else {
+            metersSortField = field;
+            metersSortDir = 'asc';
+          }
+          updateSortIndicators('meters-table', metersSortField, metersSortDir);
+          renderMeters();
+        } else if (table.id === 'readings-table') {
+          if (readingsSortField === field) {
+            readingsSortDir = readingsSortDir === 'asc' ? 'desc' : 'asc';
+          } else {
+            readingsSortField = field;
+            readingsSortDir = 'asc';
+          }
+          updateSortIndicators('readings-table', readingsSortField, readingsSortDir);
+          renderReadings();
+        }
+      }
+    });
 
     function updateReaderSelects() {
       const options = readers.map(r => `<option value="${r.id}">${r.displayName}</option>`).join('');
