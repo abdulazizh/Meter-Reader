@@ -75,13 +75,22 @@ function MeterCard({ meter, index, onPress }: MeterCardProps) {
       onPressOut={handlePressOut}
       style={[
         styles.meterCard,
-        { backgroundColor: theme.backgroundDefault, borderColor: theme.border },
+        { backgroundColor: theme.backgroundDefault, borderColor: isCompleted ? theme.success : theme.border },
+        isCompleted && styles.meterCardCompleted,
         animatedStyle,
       ]}
       testID={`card-meter-${meter.id}`}
     >
       <Animated.View entering={FadeInDown.delay(index * 50).duration(300)}>
         <View style={styles.cardHeader}>
+          <View style={styles.subscriberInfo}>
+            <ThemedText style={styles.subscriberName} numberOfLines={1}>
+              {meter.subscriberName}
+            </ThemedText>
+            <ThemedText style={[styles.accountNumber, { color: theme.textSecondary }]}>
+              {meter.accountNumber}
+            </ThemedText>
+          </View>
           <View
             style={[
               styles.statusBadge,
@@ -90,52 +99,34 @@ function MeterCard({ meter, index, onPress }: MeterCardProps) {
           >
             <Feather
               name={isCompleted ? "check" : "clock"}
-              size={16}
+              size={14}
               color="#FFFFFF"
             />
-            <ThemedText
-              style={[styles.statusText, { color: "#FFFFFF" }]}
-            >
-              {isCompleted ? "مكتملة" : "قيد الانتظار"}
-            </ThemedText>
           </View>
-          <Feather name="chevron-left" size={20} color={theme.textSecondary} />
         </View>
 
         <View style={styles.cardContent}>
-          <View style={styles.infoRow}>
-            <ThemedText style={[styles.label, { color: theme.textSecondary }]}>
-              رقم الحساب
-            </ThemedText>
-            <ThemedText style={styles.valueMain}>
-              {meter.accountNumber}
-            </ThemedText>
-          </View>
-
-          <View style={styles.infoRow}>
-            <ThemedText style={[styles.label, { color: theme.textSecondary }]}>
-              التسلسل
-            </ThemedText>
-            <ThemedText style={[styles.value, { color: theme.text }]}>
-              {meter.sequence}
+          <View style={styles.addressInfo}>
+            <ThemedText style={[styles.addressText, { color: theme.textSecondary }]}>
+              سجل {meter.record} / بلوك {meter.block} / عقار {meter.property}
             </ThemedText>
           </View>
 
           <View style={styles.rowDivider}>
             <View style={styles.infoColumn}>
               <ThemedText style={[styles.label, { color: theme.textSecondary }]}>
-                رقم المقياس
-              </ThemedText>
-              <ThemedText style={[styles.value, { color: theme.text }]}>
-                {meter.meterNumber}
-              </ThemedText>
-            </View>
-            <View style={styles.infoColumn}>
-              <ThemedText style={[styles.label, { color: theme.textSecondary }]}>
                 الصنف
               </ThemedText>
               <ThemedText style={[styles.value, { color: theme.text }]}>
                 {meter.category}
+              </ThemedText>
+            </View>
+            <View style={styles.infoColumn}>
+              <ThemedText style={[styles.label, { color: theme.textSecondary }]}>
+                المجموع
+              </ThemedText>
+              <ThemedText style={[styles.value, { color: AppColors.primary }]}>
+                {Number(meter.totalAmount).toLocaleString("ar-IQ")} د.ع
               </ThemedText>
             </View>
           </View>
@@ -229,7 +220,8 @@ export default function MetersListScreen() {
     return (
       meter.accountNumber.toLowerCase().includes(query) ||
       meter.sequence.toLowerCase().includes(query) ||
-      meter.meterNumber.toLowerCase().includes(query)
+      meter.meterNumber.toLowerCase().includes(query) ||
+      meter.subscriberName.toLowerCase().includes(query)
     );
   });
 
@@ -418,24 +410,42 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     overflow: "hidden",
   },
+  meterCardCompleted: {
+    borderWidth: 2,
+  },
   cardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
+    alignItems: "flex-start",
     padding: Spacing.lg,
     paddingBottom: Spacing.sm,
   },
-  statusBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.xs,
-    borderRadius: BorderRadius.full,
-    gap: Spacing.xs,
+  subscriberInfo: {
+    flex: 1,
+    paddingLeft: Spacing.md,
   },
-  statusText: {
-    fontSize: 12,
-    fontFamily: "Cairo_600SemiBold",
+  subscriberName: {
+    fontSize: 18,
+    fontFamily: "Cairo_700Bold",
+  },
+  accountNumber: {
+    fontSize: 14,
+    fontFamily: "Cairo_400Regular",
+    marginTop: 2,
+  },
+  addressInfo: {
+    marginBottom: Spacing.md,
+  },
+  addressText: {
+    fontSize: 13,
+    fontFamily: "Cairo_400Regular",
+  },
+  statusBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
   },
   cardContent: {
     paddingHorizontal: Spacing.lg,
