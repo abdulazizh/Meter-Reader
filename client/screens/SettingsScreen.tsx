@@ -1,13 +1,16 @@
-import React from "react";
-import { View, StyleSheet, Image, Pressable } from "react-native";
+import React, { useState, useEffect, useRef } from "react";
+import { View, StyleSheet, Image, Pressable, Alert, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import * as Sharing from "expo-sharing";
+import * as FileSystem from "expo-file-system";
 
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius, AppColors } from "@/constants/theme";
+import { apiRequest, getApiUrl } from "@/lib/query-client";
 
 interface SettingsItemProps {
   icon: keyof typeof Feather.glyphMap;
@@ -54,6 +57,64 @@ function SettingsItem({ icon, title, subtitle, onPress, showArrow = true }: Sett
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
+  const [readerId, setReaderId] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const hasSeeded = useRef(false);
+
+  useEffect(() => {
+    const seedData = async () => {
+      if (hasSeeded.current) return;
+      hasSeeded.current = true;
+      try {
+        const response = await apiRequest("POST", "/api/seed", {});
+        const data = await response.json();
+        if (data.readerId) {
+          setReaderId(data.readerId);
+        }
+      } catch (error) {
+        console.error("Error seeding data:", error);
+      }
+    };
+    seedData();
+  }, []);
+
+  const handleExport = async () => {
+    if (!readerId) {
+      Alert.alert("خطأ", "لم يتم تحميل بيانات القارئ");
+      return;
+    }
+
+    setIsExporting(true);
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    try {
+      const url = new URL(`/api/export/${readerId}`, getApiUrl());
+      const response = await fetch(url.toString());
+      const data = await response.json();
+
+      const fileName = `meter_readings_${new Date().toISOString().split('T')[0]}.json`;
+      const filePath = `${FileSystem.documentDirectory}${fileName}`;
+
+      await FileSystem.writeAsStringAsync(filePath, JSON.stringify(data, null, 2));
+
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(filePath, {
+          mimeType: "application/json",
+          dialogTitle: "تصدير القراءات",
+        });
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else {
+        Alert.alert("تم التصدير", `تم حفظ الملف: ${fileName}`);
+      }
+    } catch (error) {
+      console.error("Error exporting:", error);
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert("خطأ", "حدث خطأ أثناء تصدير البيانات");
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   return (
     <KeyboardAwareScrollViewCompat
@@ -75,7 +136,7 @@ export default function SettingsScreen() {
             قارئ العدادات
           </ThemedText>
           <ThemedText style={[styles.profileId, { color: theme.textSecondary }]}>
-            معرف القارئ: demo-reader-1
+            {readerId ? `معرف القارئ: ${readerId.slice(0, 8)}...` : "جاري التحميل..."}
           </ThemedText>
         </View>
       </View>
@@ -106,8 +167,9 @@ export default function SettingsScreen() {
         <View style={[styles.sectionContent, { backgroundColor: theme.backgroundDefault }]}>
           <SettingsItem
             icon="download"
-            title="تصدير القراءات"
-            subtitle="تصدير جميع القراءات المكتملة"
+            title={isExporting ? "جاري التصدير..." : "تصدير القراءات"}
+            subtitle="تصدير جميع القراءات والصور"
+            onPress={handleExport}
           />
           <View style={[styles.divider, { backgroundColor: theme.border }]} />
           <SettingsItem
