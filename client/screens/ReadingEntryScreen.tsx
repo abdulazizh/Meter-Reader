@@ -9,6 +9,7 @@ import {
   Platform,
   Linking,
   ActivityIndicator,
+  ScrollView,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRoute, useNavigation, RouteProp } from "@react-navigation/native";
@@ -16,7 +17,6 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
-import * as ImagePicker from "expo-image-picker";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import Animated, {
   FadeIn,
@@ -132,18 +132,6 @@ export default function ReadingEntryScreen() {
     }
   };
 
-  const handlePickImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.8,
-    });
-
-    if (!result.canceled && result.assets[0]) {
-      setPhotoUri(result.assets[0].uri);
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }
-  };
-
   const handleSave = async () => {
     if (!newReading.trim()) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
@@ -218,39 +206,17 @@ export default function ReadingEntryScreen() {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={[styles.meterInfoCard, { backgroundColor: theme.backgroundSecondary }]}>
-          <ThemedText type="h4" style={styles.sectionTitle}>
-            معلومات العداد
+        <View style={[styles.subscriberHeader, { backgroundColor: AppColors.primary }]}>
+          <ThemedText style={styles.subscriberName}>
+            {meter.subscriberName}
           </ThemedText>
-          
-          <View style={styles.infoGrid}>
-            <View style={styles.infoItem}>
-              <ThemedText style={[styles.infoLabel, { color: theme.textSecondary }]}>
-                رقم الحساب
-              </ThemedText>
-              <ThemedText style={[styles.infoValue, { color: AppColors.primary }]}>
-                {meter.accountNumber}
-              </ThemedText>
-            </View>
+          <ThemedText style={styles.accountNumberHeader}>
+            {meter.accountNumber}
+          </ThemedText>
+        </View>
 
-            <View style={styles.infoItem}>
-              <ThemedText style={[styles.infoLabel, { color: theme.textSecondary }]}>
-                التسلسل
-              </ThemedText>
-              <ThemedText style={styles.infoValue}>
-                {meter.sequence}
-              </ThemedText>
-            </View>
-
-            <View style={styles.infoItem}>
-              <ThemedText style={[styles.infoLabel, { color: theme.textSecondary }]}>
-                رقم المقياس
-              </ThemedText>
-              <ThemedText style={styles.infoValue}>
-                {meter.meterNumber}
-              </ThemedText>
-            </View>
-
+        <View style={[styles.meterInfoCard, { backgroundColor: theme.backgroundSecondary }]}>
+          <View style={styles.infoRow}>
             <View style={styles.infoItem}>
               <ThemedText style={[styles.infoLabel, { color: theme.textSecondary }]}>
                 الصنف
@@ -259,20 +225,81 @@ export default function ReadingEntryScreen() {
                 {meter.category}
               </ThemedText>
             </View>
+            <View style={styles.infoItem}>
+              <ThemedText style={[styles.infoLabel, { color: theme.textSecondary }]}>
+                رقم المقياس
+              </ThemedText>
+              <ThemedText style={styles.infoValue}>
+                {meter.meterNumber}
+              </ThemedText>
+            </View>
+          </View>
 
-            <View style={[styles.infoItem, styles.infoItemFull]}>
+          <View style={styles.addressSection}>
+            <ThemedText style={[styles.addressLabel, { color: theme.textSecondary }]}>
+              العنوان
+            </ThemedText>
+            <View style={styles.addressRow}>
+              <View style={styles.addressItem}>
+                <ThemedText style={[styles.addressItemLabel, { color: theme.textSecondary }]}>سجل</ThemedText>
+                <ThemedText style={styles.addressItemValue}>{meter.record}</ThemedText>
+              </View>
+              <View style={styles.addressItem}>
+                <ThemedText style={[styles.addressItemLabel, { color: theme.textSecondary }]}>بلوك</ThemedText>
+                <ThemedText style={styles.addressItemValue}>{meter.block}</ThemedText>
+              </View>
+              <View style={styles.addressItem}>
+                <ThemedText style={[styles.addressItemLabel, { color: theme.textSecondary }]}>عقار</ThemedText>
+                <ThemedText style={styles.addressItemValue}>{meter.property}</ThemedText>
+              </View>
+            </View>
+          </View>
+
+          <View style={[styles.previousReadingSection, { borderTopColor: theme.border }]}>
+            <View style={styles.previousReadingInfo}>
               <ThemedText style={[styles.infoLabel, { color: theme.textSecondary }]}>
                 القراءة السابقة
               </ThemedText>
-              <View style={styles.previousReadingRow}>
-                <ThemedText style={[styles.previousReadingValue, { color: AppColors.primary }]}>
-                  {meter.previousReading.toLocaleString("ar-IQ")}
-                </ThemedText>
-                <ThemedText style={[styles.previousReadingDate, { color: theme.textSecondary }]}>
-                  {formatDate(meter.previousReadingDate)}
-                </ThemedText>
-              </View>
+              <ThemedText style={[styles.previousReadingValue, { color: AppColors.primary }]}>
+                {meter.previousReading.toLocaleString("ar-IQ")}
+              </ThemedText>
             </View>
+            <View style={styles.previousReadingInfo}>
+              <ThemedText style={[styles.infoLabel, { color: theme.textSecondary }]}>
+                التاريخ
+              </ThemedText>
+              <ThemedText style={styles.previousReadingDate}>
+                {formatDate(meter.previousReadingDate)}
+              </ThemedText>
+            </View>
+          </View>
+        </View>
+
+        <View style={[styles.financialCard, { backgroundColor: theme.backgroundSecondary }]}>
+          <ThemedText style={styles.financialTitle}>المبالغ المستحقة</ThemedText>
+          <View style={styles.financialRow}>
+            <View style={styles.financialItem}>
+              <ThemedText style={[styles.financialLabel, { color: theme.textSecondary }]}>
+                المبلغ الحالي
+              </ThemedText>
+              <ThemedText style={styles.financialValue}>
+                {Number(meter.currentAmount).toLocaleString("ar-IQ")} د.ع
+              </ThemedText>
+            </View>
+            <View style={styles.financialItem}>
+              <ThemedText style={[styles.financialLabel, { color: theme.textSecondary }]}>
+                الديون
+              </ThemedText>
+              <ThemedText style={[styles.financialValue, { color: AppColors.error }]}>
+                {Number(meter.debts).toLocaleString("ar-IQ")} د.ع
+              </ThemedText>
+            </View>
+          </View>
+          <View style={[styles.totalRow, { borderTopColor: theme.border }]}>
+            <ThemedText style={styles.totalLabel}>المجموع</ThemedText>
+            <ThemedText style={[styles.totalValue, { color: AppColors.primary }]}>
+              {Number(meter.totalAmount).toLocaleString("ar-IQ")} د.ع
+            </ThemedText>
           </View>
         </View>
 
@@ -318,37 +345,20 @@ export default function ReadingEntryScreen() {
               </Pressable>
             </Animated.View>
           ) : (
-            <View style={styles.photoButtons}>
-              <AnimatedPressable
-                onPress={handleTakePhoto}
-                style={[
-                  styles.photoButton,
-                  { backgroundColor: theme.backgroundDefault, borderColor: AppColors.accent },
-                  animatedButtonStyle,
-                ]}
-                testID="button-take-photo"
-              >
-                <Feather name="camera" size={32} color={AppColors.accent} />
-                <ThemedText style={[styles.photoButtonText, { color: AppColors.accent }]}>
-                  التقاط صورة
-                </ThemedText>
-              </AnimatedPressable>
-
-              <AnimatedPressable
-                onPress={handlePickImage}
-                style={[
-                  styles.photoButton,
-                  { backgroundColor: theme.backgroundDefault, borderColor: theme.border },
-                  animatedButtonStyle,
-                ]}
-                testID="button-pick-image"
-              >
-                <Feather name="image" size={32} color={theme.textSecondary} />
-                <ThemedText style={[styles.photoButtonText, { color: theme.textSecondary }]}>
-                  اختيار من المعرض
-                </ThemedText>
-              </AnimatedPressable>
-            </View>
+            <AnimatedPressable
+              onPress={handleTakePhoto}
+              style={[
+                styles.cameraButton,
+                { backgroundColor: theme.backgroundDefault, borderColor: AppColors.accent },
+                animatedButtonStyle,
+              ]}
+              testID="button-take-photo"
+            >
+              <Feather name="camera" size={32} color={AppColors.accent} />
+              <ThemedText style={[styles.photoButtonText, { color: AppColors.accent }]}>
+                التقاط صورة
+              </ThemedText>
+            </AnimatedPressable>
           )}
         </View>
 
@@ -412,27 +422,35 @@ const styles = StyleSheet.create({
   content: {
     padding: Spacing.lg,
   },
+  subscriberHeader: {
+    padding: Spacing.lg,
+    borderRadius: BorderRadius.lg,
+    marginBottom: Spacing.md,
+  },
+  subscriberName: {
+    fontSize: 22,
+    fontFamily: "Cairo_700Bold",
+    color: "#FFFFFF",
+    textAlign: "center",
+  },
+  accountNumberHeader: {
+    fontSize: 16,
+    fontFamily: "Cairo_600SemiBold",
+    color: "rgba(255,255,255,0.85)",
+    textAlign: "center",
+    marginTop: Spacing.xs,
+  },
   meterInfoCard: {
     padding: Spacing.lg,
     borderRadius: BorderRadius.lg,
-    marginBottom: Spacing.xl,
-  },
-  sectionTitle: {
     marginBottom: Spacing.md,
-    fontFamily: "Cairo_600SemiBold",
   },
-  infoGrid: {
+  infoRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    marginHorizontal: -Spacing.sm,
+    marginBottom: Spacing.md,
   },
   infoItem: {
-    width: "50%",
-    paddingHorizontal: Spacing.sm,
-    marginBottom: Spacing.md,
-  },
-  infoItemFull: {
-    width: "100%",
+    flex: 1,
   },
   infoLabel: {
     fontSize: 12,
@@ -443,18 +461,93 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: "Cairo_600SemiBold",
   },
-  previousReadingRow: {
+  addressSection: {
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  addressLabel: {
+    fontSize: 12,
+    fontFamily: "Cairo_400Regular",
+    marginBottom: Spacing.sm,
+  },
+  addressRow: {
     flexDirection: "row",
-    alignItems: "baseline",
-    gap: Spacing.md,
+    justifyContent: "space-between",
+  },
+  addressItem: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: Spacing.sm,
+  },
+  addressItemLabel: {
+    fontSize: 11,
+    fontFamily: "Cairo_400Regular",
+  },
+  addressItemValue: {
+    fontSize: 18,
+    fontFamily: "Cairo_700Bold",
+  },
+  previousReadingSection: {
+    flexDirection: "row",
+    borderTopWidth: 1,
+    paddingTop: Spacing.md,
+    marginTop: Spacing.sm,
+  },
+  previousReadingInfo: {
+    flex: 1,
   },
   previousReadingValue: {
-    fontSize: 24,
+    fontSize: 22,
     fontFamily: "Cairo_700Bold",
   },
   previousReadingDate: {
     fontSize: 14,
     fontFamily: "Cairo_400Regular",
+  },
+  financialCard: {
+    padding: Spacing.lg,
+    borderRadius: BorderRadius.lg,
+    marginBottom: Spacing.xl,
+  },
+  financialTitle: {
+    fontSize: 14,
+    fontFamily: "Cairo_600SemiBold",
+    marginBottom: Spacing.md,
+  },
+  financialRow: {
+    flexDirection: "row",
+    marginBottom: Spacing.md,
+  },
+  financialItem: {
+    flex: 1,
+  },
+  financialLabel: {
+    fontSize: 12,
+    fontFamily: "Cairo_400Regular",
+    marginBottom: 2,
+  },
+  financialValue: {
+    fontSize: 16,
+    fontFamily: "Cairo_600SemiBold",
+  },
+  totalRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    borderTopWidth: 1,
+    paddingTop: Spacing.md,
+  },
+  totalLabel: {
+    fontSize: 16,
+    fontFamily: "Cairo_600SemiBold",
+  },
+  totalValue: {
+    fontSize: 20,
+    fontFamily: "Cairo_700Bold",
+  },
+  sectionTitle: {
+    marginBottom: Spacing.md,
+    fontFamily: "Cairo_600SemiBold",
   },
   inputSection: {
     marginBottom: Spacing.xl,
@@ -477,12 +570,7 @@ const styles = StyleSheet.create({
   photoSection: {
     marginBottom: Spacing.xl,
   },
-  photoButtons: {
-    flexDirection: "row",
-    gap: Spacing.md,
-  },
-  photoButton: {
-    flex: 1,
+  cameraButton: {
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: Spacing.xl,
