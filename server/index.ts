@@ -1,6 +1,7 @@
 import express from "express";
 import type { Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
+import { registerAdminRoutes } from "./adminRoutes";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -227,6 +228,7 @@ function setupErrorHandler(app: express.Application) {
   setupRequestLogging(app);
 
   configureExpoAndLanding(app);
+  registerAdminRoutes(app);
 
   const server = await registerRoutes(app);
 

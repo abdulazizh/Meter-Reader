@@ -1,0 +1,1124 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>لوحة تحكم المسؤول - قراءة العدادات</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Cairo', sans-serif;
+      background-color: #f5f7fa;
+      color: #1a1a2e;
+      min-height: 100vh;
+    }
+    
+    .header {
+      background: linear-gradient(135deg, #1e5799 0%, #2989d8 50%, #207cca 100%);
+      color: white;
+      padding: 20px 30px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    
+    .header h1 {
+      font-size: 24px;
+      font-weight: 700;
+    }
+    
+    .header-stats {
+      display: flex;
+      gap: 30px;
+    }
+    
+    .stat-item {
+      text-align: center;
+    }
+    
+    .stat-value {
+      font-size: 24px;
+      font-weight: 700;
+    }
+    
+    .stat-label {
+      font-size: 12px;
+      opacity: 0.9;
+    }
+    
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 30px;
+    }
+    
+    .tabs {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      background: white;
+      padding: 10px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    
+    .tab {
+      padding: 12px 24px;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      font-family: 'Cairo', sans-serif;
+      font-size: 16px;
+      font-weight: 600;
+      color: #666;
+      border-radius: 8px;
+      transition: all 0.3s;
+    }
+    
+    .tab:hover {
+      background: #f0f4f8;
+    }
+    
+    .tab.active {
+      background: #1e5799;
+      color: white;
+    }
+    
+    .panel {
+      display: none;
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    
+    .panel.active {
+      display: block;
+    }
+    
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid #eee;
+    }
+    
+    .panel-title {
+      font-size: 20px;
+      font-weight: 700;
+      color: #1a1a2e;
+    }
+    
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-family: 'Cairo', sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+      transition: all 0.3s;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .btn-primary {
+      background: #1e5799;
+      color: white;
+    }
+    
+    .btn-primary:hover {
+      background: #164378;
+    }
+    
+    .btn-success {
+      background: #28a745;
+      color: white;
+    }
+    
+    .btn-success:hover {
+      background: #218838;
+    }
+    
+    .btn-danger {
+      background: #dc3545;
+      color: white;
+    }
+    
+    .btn-danger:hover {
+      background: #c82333;
+    }
+    
+    .btn-secondary {
+      background: #6c757d;
+      color: white;
+    }
+    
+    .btn-secondary:hover {
+      background: #5a6268;
+    }
+    
+    .btn-sm {
+      padding: 6px 12px;
+      font-size: 12px;
+    }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
+    }
+    
+    th, td {
+      padding: 12px 15px;
+      text-align: right;
+      border-bottom: 1px solid #eee;
+    }
+    
+    th {
+      background: #f8f9fa;
+      font-weight: 600;
+      color: #495057;
+    }
+    
+    tr:hover {
+      background: #f8f9fa;
+    }
+    
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.5);
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
+    }
+    
+    .modal.active {
+      display: flex;
+    }
+    
+    .modal-content {
+      background: white;
+      border-radius: 12px;
+      padding: 30px;
+      width: 90%;
+      max-width: 600px;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+    
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid #eee;
+    }
+    
+    .modal-title {
+      font-size: 20px;
+      font-weight: 700;
+    }
+    
+    .modal-close {
+      background: none;
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+      color: #999;
+    }
+    
+    .form-group {
+      margin-bottom: 20px;
+    }
+    
+    .form-group label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+      color: #495057;
+    }
+    
+    .form-group input, .form-group select, .form-group textarea {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-family: 'Cairo', sans-serif;
+      font-size: 14px;
+      direction: rtl;
+    }
+    
+    .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+      outline: none;
+      border-color: #1e5799;
+    }
+    
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+    }
+    
+    .upload-area {
+      border: 2px dashed #ddd;
+      border-radius: 12px;
+      padding: 40px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    
+    .upload-area:hover {
+      border-color: #1e5799;
+      background: #f8f9fa;
+    }
+    
+    .upload-area input {
+      display: none;
+    }
+    
+    .upload-icon {
+      font-size: 48px;
+      color: #ddd;
+      margin-bottom: 15px;
+    }
+    
+    .upload-text {
+      color: #666;
+      font-size: 16px;
+    }
+    
+    .upload-hint {
+      color: #999;
+      font-size: 12px;
+      margin-top: 8px;
+    }
+    
+    .alert {
+      padding: 15px 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      display: none;
+    }
+    
+    .alert.show {
+      display: block;
+    }
+    
+    .alert-success {
+      background: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+    }
+    
+    .alert-error {
+      background: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+    }
+    
+    .badge {
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    
+    .badge-success {
+      background: #d4edda;
+      color: #155724;
+    }
+    
+    .badge-warning {
+      background: #fff3cd;
+      color: #856404;
+    }
+    
+    .badge-info {
+      background: #d1ecf1;
+      color: #0c5460;
+    }
+    
+    .search-box {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    
+    .search-box input {
+      flex: 1;
+      padding: 12px 16px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-family: 'Cairo', sans-serif;
+      font-size: 14px;
+    }
+    
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #999;
+    }
+    
+    .empty-state-icon {
+      font-size: 64px;
+      margin-bottom: 20px;
+    }
+    
+    .actions {
+      display: flex;
+      gap: 8px;
+    }
+    
+    .loading {
+      display: none;
+      text-align: center;
+      padding: 40px;
+    }
+    
+    .loading.show {
+      display: block;
+    }
+    
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #1e5799;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 15px;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <h1>لوحة تحكم المسؤول</h1>
+    <div class="header-stats">
+      <div class="stat-item">
+        <div class="stat-value" id="totalReaders">0</div>
+        <div class="stat-label">القراء</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="totalMeters">0</div>
+        <div class="stat-label">العدادات</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="totalReadings">0</div>
+        <div class="stat-label">القراءات</div>
+      </div>
+    </div>
+  </header>
+
+  <div class="container">
+    <div class="alert alert-success" id="successAlert"></div>
+    <div class="alert alert-error" id="errorAlert"></div>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="readers">القراء</button>
+      <button class="tab" data-tab="meters">العدادات</button>
+      <button class="tab" data-tab="readings">القراءات</button>
+      <button class="tab" data-tab="import">رفع البيانات</button>
+      <button class="tab" data-tab="export">تصدير البيانات</button>
+    </div>
+
+    <!-- Readers Panel -->
+    <div class="panel active" id="readers-panel">
+      <div class="panel-header">
+        <h2 class="panel-title">إدارة القراء</h2>
+        <button class="btn btn-primary" onclick="showAddReaderModal()">
+          + إضافة قارئ جديد
+        </button>
+      </div>
+      <div class="loading" id="readers-loading">
+        <div class="spinner"></div>
+        <div>جاري التحميل...</div>
+      </div>
+      <table id="readers-table">
+        <thead>
+          <tr>
+            <th>المعرف</th>
+            <th>اسم المستخدم</th>
+            <th>الاسم الظاهر</th>
+            <th>عدد العدادات</th>
+            <th>الإجراءات</th>
+          </tr>
+        </thead>
+        <tbody id="readers-body"></tbody>
+      </table>
+    </div>
+
+    <!-- Meters Panel -->
+    <div class="panel" id="meters-panel">
+      <div class="panel-header">
+        <h2 class="panel-title">إدارة العدادات</h2>
+        <button class="btn btn-primary" onclick="showAddMeterModal()">
+          + إضافة عداد جديد
+        </button>
+      </div>
+      <div class="search-box">
+        <input type="text" id="meters-search" placeholder="البحث برقم الحساب أو اسم المشترك..." oninput="filterMeters()">
+        <select id="reader-filter" onchange="filterMeters()">
+          <option value="">جميع القراء</option>
+        </select>
+      </div>
+      <div class="loading" id="meters-loading">
+        <div class="spinner"></div>
+        <div>جاري التحميل...</div>
+      </div>
+      <table id="meters-table">
+        <thead>
+          <tr>
+            <th>رقم الحساب</th>
+            <th>رقم المقياس</th>
+            <th>اسم المشترك</th>
+            <th>الصنف</th>
+            <th>القارئ</th>
+            <th>الحالة</th>
+            <th>الإجراءات</th>
+          </tr>
+        </thead>
+        <tbody id="meters-body"></tbody>
+      </table>
+    </div>
+
+    <!-- Readings Panel -->
+    <div class="panel" id="readings-panel">
+      <div class="panel-header">
+        <h2 class="panel-title">القراءات المسجلة</h2>
+      </div>
+      <div class="search-box">
+        <input type="text" id="readings-search" placeholder="البحث..." oninput="filterReadings()">
+        <select id="readings-reader-filter" onchange="filterReadings()">
+          <option value="">جميع القراء</option>
+        </select>
+      </div>
+      <div class="loading" id="readings-loading">
+        <div class="spinner"></div>
+        <div>جاري التحميل...</div>
+      </div>
+      <table id="readings-table">
+        <thead>
+          <tr>
+            <th>رقم الحساب</th>
+            <th>اسم المشترك</th>
+            <th>القراءة السابقة</th>
+            <th>القراءة الجديدة</th>
+            <th>سبب التخطي</th>
+            <th>التاريخ</th>
+            <th>الملاحظات</th>
+          </tr>
+        </thead>
+        <tbody id="readings-body"></tbody>
+      </table>
+    </div>
+
+    <!-- Import Panel -->
+    <div class="panel" id="import-panel">
+      <div class="panel-header">
+        <h2 class="panel-title">رفع البيانات</h2>
+      </div>
+      <div class="form-group">
+        <label>نوع البيانات</label>
+        <select id="import-type">
+          <option value="meters">عدادات</option>
+          <option value="readers">قراء</option>
+        </select>
+      </div>
+      <div class="upload-area" onclick="document.getElementById('import-file').click()">
+        <input type="file" id="import-file" accept=".json,.csv" onchange="handleFileSelect(event)">
+        <div class="upload-icon">📁</div>
+        <div class="upload-text">اضغط لاختيار ملف أو اسحب الملف هنا</div>
+        <div class="upload-hint">يدعم ملفات JSON و CSV</div>
+      </div>
+      <div id="import-preview" style="margin-top: 20px; display: none;">
+        <h3 style="margin-bottom: 15px;">معاينة البيانات</h3>
+        <div id="preview-content"></div>
+        <button class="btn btn-success" onclick="confirmImport()" style="margin-top: 15px;">
+          تأكيد الرفع
+        </button>
+      </div>
+    </div>
+
+    <!-- Export Panel -->
+    <div class="panel" id="export-panel">
+      <div class="panel-header">
+        <h2 class="panel-title">تصدير البيانات</h2>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>نوع البيانات</label>
+          <select id="export-type">
+            <option value="all">جميع البيانات</option>
+            <option value="readers">القراء فقط</option>
+            <option value="meters">العدادات فقط</option>
+            <option value="readings">القراءات فقط</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>صيغة الملف</label>
+          <select id="export-format">
+            <option value="json">JSON</option>
+            <option value="csv">CSV</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>القارئ (اختياري)</label>
+        <select id="export-reader">
+          <option value="">جميع القراء</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" onclick="exportData()">
+        تصدير البيانات
+      </button>
+    </div>
+  </div>
+
+  <!-- Add Reader Modal -->
+  <div class="modal" id="reader-modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title" id="reader-modal-title">إضافة قارئ جديد</h3>
+        <button class="modal-close" onclick="closeModal('reader-modal')">&times;</button>
+      </div>
+      <form id="reader-form" onsubmit="saveReader(event)">
+        <input type="hidden" id="reader-id">
+        <div class="form-group">
+          <label>اسم المستخدم</label>
+          <input type="text" id="reader-username" required>
+        </div>
+        <div class="form-group">
+          <label>كلمة المرور</label>
+          <input type="password" id="reader-password">
+        </div>
+        <div class="form-group">
+          <label>الاسم الظاهر</label>
+          <input type="text" id="reader-displayName" required>
+        </div>
+        <button type="submit" class="btn btn-primary">حفظ</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Add Meter Modal -->
+  <div class="modal" id="meter-modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title" id="meter-modal-title">إضافة عداد جديد</h3>
+        <button class="modal-close" onclick="closeModal('meter-modal')">&times;</button>
+      </div>
+      <form id="meter-form" onsubmit="saveMeter(event)">
+        <input type="hidden" id="meter-id">
+        <div class="form-row">
+          <div class="form-group">
+            <label>رقم الحساب</label>
+            <input type="text" id="meter-accountNumber" required>
+          </div>
+          <div class="form-group">
+            <label>رقم المقياس</label>
+            <input type="text" id="meter-meterNumber" required>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>التسلسل</label>
+            <input type="text" id="meter-sequence" required>
+          </div>
+          <div class="form-group">
+            <label>الصنف</label>
+            <select id="meter-category" required>
+              <option value="سكني">سكني</option>
+              <option value="تجاري">تجاري</option>
+              <option value="صناعي">صناعي</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>اسم المشترك</label>
+          <input type="text" id="meter-subscriberName" required>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>السجل</label>
+            <input type="text" id="meter-record" required>
+          </div>
+          <div class="form-group">
+            <label>البلوك</label>
+            <input type="text" id="meter-block" required>
+          </div>
+          <div class="form-group">
+            <label>العقار</label>
+            <input type="text" id="meter-property" required>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>القراءة السابقة</label>
+            <input type="number" id="meter-previousReading" required>
+          </div>
+          <div class="form-group">
+            <label>تاريخ القراءة السابقة</label>
+            <input type="date" id="meter-previousReadingDate" required>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>المبلغ الحالي</label>
+            <input type="number" id="meter-currentAmount" required>
+          </div>
+          <div class="form-group">
+            <label>الديون</label>
+            <input type="number" id="meter-debts" value="0">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>القارئ المسؤول</label>
+          <select id="meter-readerId" required></select>
+        </div>
+        <button type="submit" class="btn btn-primary">حفظ</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    let readers = [];
+    let meters = [];
+    let allReadings = [];
+    let importData = null;
+
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById(tab.dataset.tab + '-panel').classList.add('active');
+      });
+    });
+
+    async function loadData() {
+      await Promise.all([loadReaders(), loadMeters(), loadReadings()]);
+      updateStats();
+    }
+
+    async function loadReaders() {
+      document.getElementById('readers-loading').classList.add('show');
+      try {
+        const response = await fetch('/api/admin/readers');
+        readers = await response.json();
+        renderReaders();
+        updateReaderSelects();
+      } catch (error) {
+        showError('فشل تحميل القراء');
+      }
+      document.getElementById('readers-loading').classList.remove('show');
+    }
+
+    async function loadMeters() {
+      document.getElementById('meters-loading').classList.add('show');
+      try {
+        const response = await fetch('/api/admin/meters');
+        meters = await response.json();
+        renderMeters();
+      } catch (error) {
+        showError('فشل تحميل العدادات');
+      }
+      document.getElementById('meters-loading').classList.remove('show');
+    }
+
+    async function loadReadings() {
+      document.getElementById('readings-loading').classList.add('show');
+      try {
+        const response = await fetch('/api/admin/readings');
+        allReadings = await response.json();
+        renderReadings();
+      } catch (error) {
+        showError('فشل تحميل القراءات');
+      }
+      document.getElementById('readings-loading').classList.remove('show');
+    }
+
+    function renderReaders() {
+      const tbody = document.getElementById('readers-body');
+      tbody.innerHTML = readers.map(reader => `
+        <tr>
+          <td>${reader.id.slice(0, 8)}...</td>
+          <td>${reader.username}</td>
+          <td>${reader.displayName}</td>
+          <td>${reader.meterCount || 0}</td>
+          <td class="actions">
+            <button class="btn btn-sm btn-secondary" onclick="editReader('${reader.id}')">تعديل</button>
+            <button class="btn btn-sm btn-danger" onclick="deleteReader('${reader.id}')">حذف</button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function renderMeters() {
+      const tbody = document.getElementById('meters-body');
+      const filteredMeters = filterMetersData();
+      tbody.innerHTML = filteredMeters.map(meter => {
+        const reader = readers.find(r => r.id === meter.readerId);
+        const hasReading = meter.latestReading !== null;
+        return `
+          <tr>
+            <td>${meter.accountNumber}</td>
+            <td>${meter.meterNumber}</td>
+            <td>${meter.subscriberName}</td>
+            <td>${meter.category}</td>
+            <td>${reader?.displayName || '-'}</td>
+            <td><span class="badge ${hasReading ? 'badge-success' : 'badge-warning'}">${hasReading ? 'تم القراءة' : 'لم تتم القراءة'}</span></td>
+            <td class="actions">
+              <button class="btn btn-sm btn-secondary" onclick="editMeter('${meter.id}')">تعديل</button>
+              <button class="btn btn-sm btn-danger" onclick="deleteMeter('${meter.id}')">حذف</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function renderReadings() {
+      const tbody = document.getElementById('readings-body');
+      const filteredReadings = filterReadingsData();
+      tbody.innerHTML = filteredReadings.map(reading => {
+        const meter = meters.find(m => m.id === reading.meterId);
+        return `
+          <tr>
+            <td>${meter?.accountNumber || '-'}</td>
+            <td>${meter?.subscriberName || '-'}</td>
+            <td>${meter?.previousReading?.toLocaleString('ar-IQ') || '-'}</td>
+            <td>${reading.newReading !== null ? reading.newReading.toLocaleString('ar-IQ') : '-'}</td>
+            <td>${reading.skipReason || '-'}</td>
+            <td>${new Date(reading.createdAt).toLocaleDateString('ar-IQ')}</td>
+            <td>${reading.notes || '-'}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function filterMetersData() {
+      const search = document.getElementById('meters-search').value.toLowerCase();
+      const readerId = document.getElementById('reader-filter').value;
+      return meters.filter(m => {
+        const matchesSearch = !search || 
+          m.accountNumber.toLowerCase().includes(search) ||
+          m.subscriberName.toLowerCase().includes(search);
+        const matchesReader = !readerId || m.readerId === readerId;
+        return matchesSearch && matchesReader;
+      });
+    }
+
+    function filterReadingsData() {
+      const search = document.getElementById('readings-search').value.toLowerCase();
+      const readerId = document.getElementById('readings-reader-filter').value;
+      return allReadings.filter(r => {
+        const meter = meters.find(m => m.id === r.meterId);
+        const matchesSearch = !search || 
+          meter?.accountNumber.toLowerCase().includes(search) ||
+          meter?.subscriberName.toLowerCase().includes(search);
+        const matchesReader = !readerId || r.readerId === readerId;
+        return matchesSearch && matchesReader;
+      });
+    }
+
+    function filterMeters() { renderMeters(); }
+    function filterReadings() { renderReadings(); }
+
+    function updateReaderSelects() {
+      const options = readers.map(r => `<option value="${r.id}">${r.displayName}</option>`).join('');
+      document.getElementById('reader-filter').innerHTML = '<option value="">جميع القراء</option>' + options;
+      document.getElementById('readings-reader-filter').innerHTML = '<option value="">جميع القراء</option>' + options;
+      document.getElementById('export-reader').innerHTML = '<option value="">جميع القراء</option>' + options;
+      document.getElementById('meter-readerId').innerHTML = options;
+    }
+
+    function updateStats() {
+      document.getElementById('totalReaders').textContent = readers.length;
+      document.getElementById('totalMeters').textContent = meters.length;
+      document.getElementById('totalReadings').textContent = allReadings.length;
+    }
+
+    function showAddReaderModal() {
+      document.getElementById('reader-modal-title').textContent = 'إضافة قارئ جديد';
+      document.getElementById('reader-form').reset();
+      document.getElementById('reader-id').value = '';
+      document.getElementById('reader-modal').classList.add('active');
+    }
+
+    function editReader(id) {
+      const reader = readers.find(r => r.id === id);
+      if (!reader) return;
+      document.getElementById('reader-modal-title').textContent = 'تعديل القارئ';
+      document.getElementById('reader-id').value = reader.id;
+      document.getElementById('reader-username').value = reader.username;
+      document.getElementById('reader-displayName').value = reader.displayName;
+      document.getElementById('reader-password').value = '';
+      document.getElementById('reader-modal').classList.add('active');
+    }
+
+    async function saveReader(event) {
+      event.preventDefault();
+      const id = document.getElementById('reader-id').value;
+      const data = {
+        username: document.getElementById('reader-username').value,
+        displayName: document.getElementById('reader-displayName').value,
+      };
+      const password = document.getElementById('reader-password').value;
+      if (password) data.password = password;
+
+      try {
+        const url = id ? `/api/admin/readers/${id}` : '/api/admin/readers';
+        const method = id ? 'PUT' : 'POST';
+        const response = await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        if (!response.ok) throw new Error();
+        showSuccess(id ? 'تم تحديث القارئ' : 'تم إضافة القارئ');
+        closeModal('reader-modal');
+        loadReaders();
+      } catch (error) {
+        showError('فشل حفظ القارئ');
+      }
+    }
+
+    async function deleteReader(id) {
+      if (!confirm('هل أنت متأكد من حذف هذا القارئ؟')) return;
+      try {
+        const response = await fetch(`/api/admin/readers/${id}`, { method: 'DELETE' });
+        if (!response.ok) throw new Error();
+        showSuccess('تم حذف القارئ');
+        loadReaders();
+      } catch (error) {
+        showError('فشل حذف القارئ');
+      }
+    }
+
+    function showAddMeterModal() {
+      document.getElementById('meter-modal-title').textContent = 'إضافة عداد جديد';
+      document.getElementById('meter-form').reset();
+      document.getElementById('meter-id').value = '';
+      document.getElementById('meter-modal').classList.add('active');
+    }
+
+    function editMeter(id) {
+      const meter = meters.find(m => m.id === id);
+      if (!meter) return;
+      document.getElementById('meter-modal-title').textContent = 'تعديل العداد';
+      document.getElementById('meter-id').value = meter.id;
+      document.getElementById('meter-accountNumber').value = meter.accountNumber;
+      document.getElementById('meter-meterNumber').value = meter.meterNumber;
+      document.getElementById('meter-sequence').value = meter.sequence;
+      document.getElementById('meter-category').value = meter.category;
+      document.getElementById('meter-subscriberName').value = meter.subscriberName;
+      document.getElementById('meter-record').value = meter.record;
+      document.getElementById('meter-block').value = meter.block;
+      document.getElementById('meter-property').value = meter.property;
+      document.getElementById('meter-previousReading').value = meter.previousReading;
+      document.getElementById('meter-previousReadingDate').value = meter.previousReadingDate?.split('T')[0] || '';
+      document.getElementById('meter-currentAmount').value = meter.currentAmount;
+      document.getElementById('meter-debts').value = meter.debts || 0;
+      document.getElementById('meter-readerId').value = meter.readerId;
+      document.getElementById('meter-modal').classList.add('active');
+    }
+
+    async function saveMeter(event) {
+      event.preventDefault();
+      const id = document.getElementById('meter-id').value;
+      const currentAmount = document.getElementById('meter-currentAmount').value;
+      const debts = document.getElementById('meter-debts').value || '0';
+      const data = {
+        accountNumber: document.getElementById('meter-accountNumber').value,
+        meterNumber: document.getElementById('meter-meterNumber').value,
+        sequence: document.getElementById('meter-sequence').value,
+        category: document.getElementById('meter-category').value,
+        subscriberName: document.getElementById('meter-subscriberName').value,
+        record: document.getElementById('meter-record').value,
+        block: document.getElementById('meter-block').value,
+        property: document.getElementById('meter-property').value,
+        previousReading: parseInt(document.getElementById('meter-previousReading').value),
+        previousReadingDate: document.getElementById('meter-previousReadingDate').value,
+        currentAmount: currentAmount,
+        debts: debts,
+        totalAmount: (parseFloat(currentAmount) + parseFloat(debts)).toString(),
+        readerId: document.getElementById('meter-readerId').value,
+      };
+
+      try {
+        const url = id ? `/api/admin/meters/${id}` : '/api/admin/meters';
+        const method = id ? 'PUT' : 'POST';
+        const response = await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        if (!response.ok) throw new Error();
+        showSuccess(id ? 'تم تحديث العداد' : 'تم إضافة العداد');
+        closeModal('meter-modal');
+        loadMeters();
+      } catch (error) {
+        showError('فشل حفظ العداد');
+      }
+    }
+
+    async function deleteMeter(id) {
+      if (!confirm('هل أنت متأكد من حذف هذا العداد؟')) return;
+      try {
+        const response = await fetch(`/api/admin/meters/${id}`, { method: 'DELETE' });
+        if (!response.ok) throw new Error();
+        showSuccess('تم حذف العداد');
+        loadMeters();
+      } catch (error) {
+        showError('فشل حذف العداد');
+      }
+    }
+
+    function handleFileSelect(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const content = e.target.result;
+          if (file.name.endsWith('.json')) {
+            importData = JSON.parse(content);
+          } else if (file.name.endsWith('.csv')) {
+            importData = parseCSV(content);
+          }
+          showImportPreview();
+        } catch (error) {
+          showError('فشل قراءة الملف');
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function parseCSV(content) {
+      const lines = content.trim().split('\n');
+      const headers = lines[0].split(',').map(h => h.trim());
+      return lines.slice(1).map(line => {
+        const values = line.split(',').map(v => v.trim());
+        const obj = {};
+        headers.forEach((h, i) => obj[h] = values[i]);
+        return obj;
+      });
+    }
+
+    function showImportPreview() {
+      const preview = document.getElementById('import-preview');
+      const content = document.getElementById('preview-content');
+      if (!importData || importData.length === 0) {
+        content.innerHTML = '<p>لا توجد بيانات للعرض</p>';
+      } else {
+        content.innerHTML = `<p>سيتم رفع ${importData.length} سجل</p>`;
+      }
+      preview.style.display = 'block';
+    }
+
+    async function confirmImport() {
+      if (!importData) return;
+      const type = document.getElementById('import-type').value;
+      try {
+        const response = await fetch(`/api/admin/import/${type}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(importData)
+        });
+        if (!response.ok) throw new Error();
+        const result = await response.json();
+        showSuccess(`تم رفع ${result.count} سجل بنجاح`);
+        document.getElementById('import-preview').style.display = 'none';
+        importData = null;
+        loadData();
+      } catch (error) {
+        showError('فشل رفع البيانات');
+      }
+    }
+
+    async function exportData() {
+      const type = document.getElementById('export-type').value;
+      const format = document.getElementById('export-format').value;
+      const readerId = document.getElementById('export-reader').value;
+      
+      let url = `/api/admin/export/${type}?format=${format}`;
+      if (readerId) url += `&readerId=${readerId}`;
+      
+      try {
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        let content, filename, mimeType;
+        if (format === 'json') {
+          content = JSON.stringify(data, null, 2);
+          filename = `export_${type}_${Date.now()}.json`;
+          mimeType = 'application/json';
+        } else {
+          content = convertToCSV(data);
+          filename = `export_${type}_${Date.now()}.csv`;
+          mimeType = 'text/csv';
+        }
+        
+        const blob = new Blob([content], { type: mimeType });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = filename;
+        link.click();
+        showSuccess('تم تصدير البيانات بنجاح');
+      } catch (error) {
+        showError('فشل تصدير البيانات');
+      }
+    }
+
+    function convertToCSV(data) {
+      if (!Array.isArray(data) || data.length === 0) return '';
+      const headers = Object.keys(data[0]);
+      const rows = data.map(obj => headers.map(h => obj[h] ?? '').join(','));
+      return [headers.join(','), ...rows].join('\n');
+    }
+
+    function closeModal(modalId) {
+      document.getElementById(modalId).classList.remove('active');
+    }
+
+    function showSuccess(message) {
+      const alert = document.getElementById('successAlert');
+      alert.textContent = message;
+      alert.classList.add('show');
+      setTimeout(() => alert.classList.remove('show'), 3000);
+    }
+
+    function showError(message) {
+      const alert = document.getElementById('errorAlert');
+      alert.textContent = message;
+      alert.classList.add('show');
+      setTimeout(() => alert.classList.remove('show'), 3000);
+    }
+
+    loadData();
+  </script>
+</body>
+</html>

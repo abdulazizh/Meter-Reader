@@ -124,6 +124,61 @@ export class DatabaseStorage implements IStorage {
       })
       .where(eq(meters.id, meterId));
   }
+
+  async getAllReaders(): Promise<Reader[]> {
+    return db.select().from(readers);
+  }
+
+  async updateReader(id: string, data: Partial<InsertReader>): Promise<Reader> {
+    const updateData: Partial<InsertReader> = {};
+    if (data.username) updateData.username = data.username;
+    if (data.displayName) updateData.displayName = data.displayName;
+    if (data.password) updateData.password = data.password;
+    
+    const [reader] = await db
+      .update(readers)
+      .set(updateData)
+      .where(eq(readers.id, id))
+      .returning();
+    return reader;
+  }
+
+  async deleteReader(id: string): Promise<void> {
+    await db.delete(readers).where(eq(readers.id, id));
+  }
+
+  async getAllMeters(): Promise<MeterWithReading[]> {
+    const metersList = await db.select().from(meters).orderBy(meters.sequence);
+    const metersWithReadings: MeterWithReading[] = [];
+    
+    for (const meter of metersList) {
+      const latestReading = await this.getLatestReadingByMeterId(meter.id);
+      metersWithReadings.push({
+        ...meter,
+        latestReading: latestReading || null,
+      });
+    }
+
+    return metersWithReadings;
+  }
+
+  async updateMeter(id: string, data: Partial<InsertMeter>): Promise<Meter> {
+    const [meter] = await db
+      .update(meters)
+      .set(data)
+      .where(eq(meters.id, id))
+      .returning();
+    return meter;
+  }
+
+  async deleteMeter(id: string): Promise<void> {
+    await db.delete(readings).where(eq(readings.meterId, id));
+    await db.delete(meters).where(eq(meters.id, id));
+  }
+
+  async getAllReadings(): Promise<Reading[]> {
+    return db.select().from(readings).orderBy(desc(readings.createdAt));
+  }
 }
 
 export const storage = new DatabaseStorage();
