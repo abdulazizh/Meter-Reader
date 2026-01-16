@@ -61,11 +61,10 @@ function MeterCard({ meter, index, onPress }: MeterCardProps) {
 
   const formatDate = (date: Date | string) => {
     const d = new Date(date);
-    return d.toLocaleDateString("ar-IQ", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}/${month}/${day}`;
   };
 
   return (
