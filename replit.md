@@ -24,9 +24,10 @@ Preferred communication style: Simple, everyday language.
 - **Animations**: React Native Reanimated for smooth interactions
 
 ### Screen Structure
-1. **MetersListScreen**: Main dashboard showing assigned meters with search, progress indicator, and completion status
-2. **ReadingEntryScreen**: Form for inputting readings, capturing photos via camera, and adding notes
-3. **SettingsScreen**: User preferences and profile settings
+1. **LoginScreen**: Authentication screen for meter readers with username/password login
+2. **MetersListScreen**: Main dashboard showing assigned meters with search, progress indicator, and completion status
+3. **ReadingEntryScreen**: Form for inputting readings, capturing photos via camera, and adding notes
+4. **SettingsScreen**: User preferences, profile stats, and logout functionality
 
 ### Backend Architecture
 - **Framework**: Express.js with TypeScript
@@ -72,8 +73,27 @@ Photos are handled with dual storage:
    - Photos can be retrieved via `/api/photo/:path` endpoint
    - Admin panel displays clickable links to view photos
 
+### Authentication System
+Dual authentication system for different user types:
+
+**Mobile App (Readers)**:
+- Login screen with username/password
+- Login API: `POST /api/login` with `{username, password}`
+- Session persisted with AsyncStorage
+- Logout available in Settings screen
+- Demo account: username=`demo`, password=`demo123`
+
+**Admin Panel**:
+- Session-based authentication using express-session
+- Login page: `/admin/login` on port 5000
+- Login API: `POST /api/admin/login` with `{username, password}`
+- Admin credentials: username=`admin`, password=`admin123`
+- All `/api/admin/*` routes protected by `requireAdmin` middleware
+- Logout available in admin panel header
+
 ### Admin Panel Features
 Located at `/admin` on the backend server (port 5000):
+- **Requires Authentication**: Must login at `/admin/login` first
 - **Readings Management**: Edit and delete individual readings
 - **Month Filtering**: Filter readings by specific month (current year + 2 previous years)
 - **Multiple Filters**: Search, reader, type (reading/skipped), photo status, location status, date range
@@ -85,6 +105,7 @@ Located at `/admin` on the backend server (port 5000):
 
 ### Environment Variables Required
 - `DATABASE_URL`: PostgreSQL connection string
+- `SESSION_SECRET`: Secret key for express-session (admin panel authentication)
 - `EXPO_PUBLIC_DOMAIN`: API server domain for client requests
 - `REPLIT_DEV_DOMAIN`: Development domain (auto-set by Replit)
 

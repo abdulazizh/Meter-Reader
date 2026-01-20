@@ -240,8 +240,8 @@ function setupErrorHandler(app: express.Application) {
   
   setupRequestLogging(app);
 
-  configureExpoAndLanding(app);
   registerAdminRoutes(app);
+  configureExpoAndLanding(app);
 
   const server = await registerRoutes(app);
 
