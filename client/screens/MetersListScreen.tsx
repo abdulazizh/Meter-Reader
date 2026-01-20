@@ -27,6 +27,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius, AppColors, Shadows, Typography } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { apiRequest, getApiUrl } from "@/lib/query-client";
+import { useAuth } from "@/contexts/AuthContext";
 import type { MeterWithReading } from "@shared/schema";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
@@ -187,27 +188,11 @@ export default function MetersListScreen() {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { reader } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [refreshing, setRefreshing] = useState(false);
-  const [readerId, setReaderId] = useState<string | null>(null);
-  const hasSeeded = useRef(false);
 
-  useEffect(() => {
-    const seedData = async () => {
-      if (hasSeeded.current) return;
-      hasSeeded.current = true;
-      try {
-        const response = await apiRequest("POST", "/api/seed", {});
-        const data = await response.json();
-        if (data.readerId) {
-          setReaderId(data.readerId);
-        }
-      } catch (error) {
-        console.error("Error seeding data:", error);
-      }
-    };
-    seedData();
-  }, []);
+  const readerId = reader?.id || null;
 
   const { data: meters = [], isLoading, refetch } = useQuery<MeterWithReading[]>({
     queryKey: ["/api/meters", readerId],

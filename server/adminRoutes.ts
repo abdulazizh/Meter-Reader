@@ -1,14 +1,57 @@
-import type { Express } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import { storage } from "./storage";
 import path from "node:path";
 import * as XLSX from "xlsx";
 
+const ADMIN_USERNAME = "admin";
+const ADMIN_PASSWORD = "admin123";
+
+declare module 'express-session' {
+  interface SessionData {
+    isAdmin?: boolean;
+  }
+}
+
+function requireAdmin(req: Request, res: Response, next: NextFunction) {
+  if (req.session?.isAdmin) {
+    return next();
+  }
+  if (req.path.startsWith('/api/')) {
+    return res.status(401).json({ error: "غير مصرح - يرجى تسجيل الدخول" });
+  }
+  return res.redirect('/admin/login');
+}
+
 export function registerAdminRoutes(app: Express) {
-  app.get("/admin", (req, res) => {
+  app.get("/admin/login", (req, res) => {
+    res.sendFile(path.join(process.cwd(), "server/templates/admin/login.html"));
+  });
+
+  app.post("/api/admin/login", (req, res) => {
+    const { username, password } = req.body;
+    
+    if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+      req.session.isAdmin = true;
+      return res.json({ success: true });
+    }
+    
+    return res.status(401).json({ success: false, error: "اسم المستخدم أو كلمة المرور غير صحيحة" });
+  });
+
+  app.post("/api/admin/logout", (req, res) => {
+    req.session.destroy((err) => {
+      if (err) {
+        return res.status(500).json({ error: "فشل تسجيل الخروج" });
+      }
+      res.json({ success: true });
+    });
+  });
+
+  app.get("/admin", requireAdmin, (req, res) => {
     res.sendFile(path.join(process.cwd(), "server/templates/admin/index.html"));
   });
 
-  app.get("/api/admin/readers", async (req, res) => {
+  app.get("/api/admin/readers", requireAdmin, async (req, res) => {
     try {
       const readers = await storage.getAllReaders();
       const readersWithCounts = await Promise.all(
@@ -24,7 +67,7 @@ export function registerAdminRoutes(app: Express) {
     }
   });
 
-  app.post("/api/admin/readers", async (req, res) => {
+  app.post("/api/admin/readers", requireAdmin, async (req, res) => {
     try {
       const { username, password, displayName } = req.body;
       const reader = await storage.createReader({
@@ -39,7 +82,7 @@ export function registerAdminRoutes(app: Express) {
     }
   });
 
-  app.put("/api/admin/readers/:id", async (req, res) => {
+  app.put("/api/admin/readers/:id", requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
       const { username, password, displayName } = req.body;
@@ -55,7 +98,7 @@ export function registerAdminRoutes(app: Express) {
     }
   });
 
-  app.delete("/api/admin/readers/:id", async (req, res) => {
+  app.delete("/api/admin/readers/:id", requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
       await storage.deleteReader(id);
@@ -66,7 +109,7 @@ export function registerAdminRoutes(app: Express) {
     }
   });
 
-  app.get("/api/admin/meters", async (req, res) => {
+  app.get("/api/admin/meters", requireAdmin, async (req, res) => {
     try {
       const meters = await storage.getAllMeters();
       res.json(meters);
@@ -76,7 +119,7 @@ export function registerAdminRoutes(app: Express) {
     }
   });
 
-  app.post("/api/admin/meters", async (req, res) => {
+  app.post("/api/admin/meters", requireAdmin, async (req, res) => {
     try {
       const meter = await storage.createMeter(req.body);
       res.status(201).json(meter);
@@ -86,7 +129,7 @@ export function registerAdminRoutes(app: Express) {
     }
   });
 
-  app.put("/api/admin/meters/:id", async (req, res) => {
+  app.put("/api/admin/meters/:id", requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
       const meter = await storage.updateMeter(id, req.body);
@@ -97,7 +140,7 @@ export function registerAdminRoutes(app: Express) {
     }
   });
 
-  app.delete("/api/admin/meters/:id", async (req, res) => {
+  app.delete("/api/admin/meters/:id", requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
       await storage.deleteMeter(id);
@@ -108,7 +151,7 @@ export function registerAdminRoutes(app: Express) {
     }
   });
 
-  app.get("/api/admin/readings", async (req, res) => {
+  app.get("/api/admin/readings", requireAdmin, async (req, res) => {
     try {
       const { year, month } = req.query;
       let readings;
@@ -124,7 +167,7 @@ export function registerAdminRoutes(app: Express) {
     }
   });
 
-  app.get("/api/admin/readings/:id", async (req, res) => {
+  app.get("/api/admin/readings/:id", requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
       const reading = await storage.getReadingById(id);
@@ -138,7 +181,7 @@ export function registerAdminRoutes(app: Express) {
     }
   });
 
-  app.put("/api/admin/readings/:id", async (req, res) => {
+  app.put("/api/admin/readings/:id", requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
       const { newReading, notes, skipReason } = req.body;
@@ -154,7 +197,7 @@ export function registerAdminRoutes(app: Express) {
     }
   });
 
-  app.delete("/api/admin/readings/:id", async (req, res) => {
+  app.delete("/api/admin/readings/:id", requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
       await storage.deleteReading(id);
@@ -165,7 +208,7 @@ export function registerAdminRoutes(app: Express) {
     }
   });
 
-  app.post("/api/admin/import/:type", async (req, res) => {
+  app.post("/api/admin/import/:type", requireAdmin, async (req, res) => {
     try {
       const { type } = req.params;
       const data = req.body;
@@ -213,7 +256,7 @@ export function registerAdminRoutes(app: Express) {
     }
   });
 
-  app.get("/api/admin/export/:type", async (req, res) => {
+  app.get("/api/admin/export/:type", requireAdmin, async (req, res) => {
     try {
       const { type } = req.params;
       const { readerId } = req.query;
@@ -313,7 +356,7 @@ export function registerAdminRoutes(app: Express) {
     }
   });
 
-  app.get("/api/admin/export-excel/:type", async (req, res) => {
+  app.get("/api/admin/export-excel/:type", requireAdmin, async (req, res) => {
     try {
       const { type } = req.params;
       const { readerId } = req.query;

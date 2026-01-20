@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from "react";
-import { View, StyleSheet, Image, Pressable, Alert, ActivityIndicator } from "react-native";
+import React, { useState, useEffect } from "react";
+import { View, StyleSheet, Image, Pressable, Alert } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -11,6 +11,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius, AppColors } from "@/constants/theme";
 import { apiRequest, getApiUrl } from "@/lib/query-client";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface SettingsItemProps {
   icon: keyof typeof Feather.glyphMap;
@@ -68,28 +69,17 @@ interface ReaderProfile {
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
-  const [readerId, setReaderId] = useState<string | null>(null);
+  const { reader, logout } = useAuth();
   const [readerProfile, setReaderProfile] = useState<ReaderProfile | null>(null);
   const [isExporting, setIsExporting] = useState(false);
-  const hasSeeded = useRef(false);
+
+  const readerId = reader?.id || null;
 
   useEffect(() => {
-    const seedData = async () => {
-      if (hasSeeded.current) return;
-      hasSeeded.current = true;
-      try {
-        const response = await apiRequest("POST", "/api/seed", {});
-        const data = await response.json();
-        if (data.readerId) {
-          setReaderId(data.readerId);
-          fetchReaderProfile(data.readerId);
-        }
-      } catch (error) {
-        console.error("Error seeding data:", error);
-      }
-    };
-    seedData();
-  }, []);
+    if (readerId) {
+      fetchReaderProfile(readerId);
+    }
+  }, [readerId]);
 
   const fetchReaderProfile = async (id: string) => {
     try {
@@ -100,6 +90,27 @@ export default function SettingsScreen() {
     } catch (error) {
       console.error("Error fetching reader profile:", error);
     }
+  };
+
+  const handleLogout = async () => {
+    Alert.alert(
+      "تسجيل الخروج",
+      "هل أنت متأكد من تسجيل الخروج؟",
+      [
+        {
+          text: "إلغاء",
+          style: "cancel",
+        },
+        {
+          text: "خروج",
+          style: "destructive",
+          onPress: async () => {
+            await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            await logout();
+          },
+        },
+      ]
+    );
   };
 
   const handleExport = async () => {
@@ -253,6 +264,19 @@ export default function SettingsScreen() {
           />
         </View>
       </View>
+
+      <View style={styles.section}>
+        <Pressable
+          onPress={handleLogout}
+          style={({ pressed }) => [
+            styles.logoutButton,
+            { opacity: pressed ? 0.8 : 1 },
+          ]}
+        >
+          <Feather name="log-out" size={20} color="#FFFFFF" />
+          <ThemedText style={styles.logoutText}>تسجيل الخروج</ThemedText>
+        </Pressable>
+      </View>
     </KeyboardAwareScrollViewCompat>
   );
 }
@@ -353,5 +377,19 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     marginHorizontal: Spacing.lg,
+  },
+  logoutButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: AppColors.error,
+    padding: Spacing.lg,
+    borderRadius: BorderRadius.lg,
+    gap: Spacing.sm,
+  },
+  logoutText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontFamily: "Cairo_600SemiBold",
   },
 });
