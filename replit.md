@@ -58,9 +58,19 @@ Preferred communication style: Simple, everyday language.
 ### Native Capabilities
 - **expo-camera**: Capture meter photos in the field
 - **expo-image-picker**: Alternative image selection
-- **expo-file-system**: Local file management for photos
+- **expo-file-system**: Local file management and Base64 conversion for photos
+- **expo-media-library**: Save photos to device gallery in "قراءات الكهرباء" album
 - **expo-sharing**: Export functionality for readings
 - **expo-haptics**: Tactile feedback on interactions
+
+### Photo Storage
+Photos are handled with dual storage:
+1. **Local Gallery**: Photos are saved to device photo gallery in a dedicated album called "قراءات الكهرباء" using expo-media-library
+2. **Cloud Storage**: Photos are uploaded to Replit Object Storage via `/api/upload-photo` endpoint
+   - Photos are converted to Base64 and sent to server
+   - Server stores photos in `photos/` path in Object Storage
+   - Photos can be retrieved via `/api/photo/:path` endpoint
+   - Admin panel displays clickable links to view photos
 
 ### Third-Party Services
 - **Google Fonts**: Cairo font family loaded via @expo-google-fonts/cairo
