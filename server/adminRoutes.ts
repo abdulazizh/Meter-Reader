@@ -110,11 +110,58 @@ export function registerAdminRoutes(app: Express) {
 
   app.get("/api/admin/readings", async (req, res) => {
     try {
-      const readings = await storage.getAllReadings();
+      const { year, month } = req.query;
+      let readings;
+      if (year && month) {
+        readings = await storage.getReadingsByMonth(parseInt(year as string), parseInt(month as string));
+      } else {
+        readings = await storage.getAllReadings();
+      }
       res.json(readings);
     } catch (error) {
       console.error("Error fetching readings:", error);
       res.status(500).json({ error: "Failed to fetch readings" });
+    }
+  });
+
+  app.get("/api/admin/readings/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const reading = await storage.getReadingById(id);
+      if (!reading) {
+        return res.status(404).json({ error: "Reading not found" });
+      }
+      res.json(reading);
+    } catch (error) {
+      console.error("Error fetching reading:", error);
+      res.status(500).json({ error: "Failed to fetch reading" });
+    }
+  });
+
+  app.put("/api/admin/readings/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { newReading, notes, skipReason } = req.body;
+      const reading = await storage.updateReading(id, {
+        newReading: newReading !== undefined ? parseInt(newReading) : undefined,
+        notes,
+        skipReason,
+      });
+      res.json(reading);
+    } catch (error) {
+      console.error("Error updating reading:", error);
+      res.status(500).json({ error: "Failed to update reading" });
+    }
+  });
+
+  app.delete("/api/admin/readings/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteReading(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting reading:", error);
+      res.status(500).json({ error: "Failed to delete reading" });
     }
   });
 

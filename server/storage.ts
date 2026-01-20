@@ -179,6 +179,36 @@ export class DatabaseStorage implements IStorage {
   async getAllReadings(): Promise<Reading[]> {
     return db.select().from(readings).orderBy(desc(readings.createdAt));
   }
+
+  async getReadingById(id: string): Promise<Reading | undefined> {
+    const [reading] = await db.select().from(readings).where(eq(readings.id, id));
+    return reading || undefined;
+  }
+
+  async updateReading(id: string, data: Partial<InsertReading>): Promise<Reading> {
+    const [reading] = await db
+      .update(readings)
+      .set(data)
+      .where(eq(readings.id, id))
+      .returning();
+    return reading;
+  }
+
+  async deleteReading(id: string): Promise<void> {
+    await db.delete(readings).where(eq(readings.id, id));
+  }
+
+  async getReadingsByMonth(year: number, month: number): Promise<Reading[]> {
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0, 23, 59, 59);
+    
+    const allReadings = await db.select().from(readings).orderBy(desc(readings.createdAt));
+    return allReadings.filter(r => {
+      if (!r.readingDate) return false;
+      const date = new Date(r.readingDate);
+      return date >= startDate && date <= endDate;
+    });
+  }
 }
 
 export const storage = new DatabaseStorage();
