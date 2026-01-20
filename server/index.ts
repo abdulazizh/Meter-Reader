@@ -7,6 +7,7 @@ import * as fs from "fs";
 import * as path from "path";
 
 const app = express();
+app.set('trust proxy', 1); // Trust Render's proxy for secure cookies
 const log = console.log;
 
 declare module "http" {
