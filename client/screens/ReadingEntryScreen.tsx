@@ -36,6 +36,8 @@ import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius, AppColors, Shadows, Typography } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { apiRequest, getApiUrl } from "@/lib/query-client";
+import { savePendingReading } from "@/lib/offline-storage";
+import { uploadPhotoToServer } from "@/lib/api-utils";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -200,7 +202,28 @@ export default function ReadingEntryScreen() {
       console.log("Could not get location:", error);
     }
 
-    skipMutation.mutate({ skipReason: reasonLabel, latitude, longitude });
+    const success = await skipMutation.mutateAsync({ skipReason: reasonLabel, latitude, longitude }).catch(() => null);
+    
+    if (!success) {
+      const savedLocally = await savePendingReading({
+        meterId: meter.id,
+        readerId: meter.readerId,
+        newReading: null,
+        photoUri: "",
+        photoFileName: "",
+        skipReason: reasonLabel,
+        latitude,
+        longitude,
+      });
+
+      if (savedLocally) {
+        Alert.alert("تم الحفظ محلياً", "لا يوجد اتصال بالإنترنت. تم حفظ القراءة محلياً وسيتم مزامنتها لاحقاً.", [
+          { text: "حسناً", onPress: () => goToNextMeter() }
+        ]);
+      } else {
+        Alert.alert("خطأ", "فشل الحفظ محلياً أيضاً.");
+      }
+    }
   };
 
   const formatDate = (date: Date | string) => {
@@ -286,39 +309,6 @@ export default function ReadingEntryScreen() {
     }
   };
 
-  const uploadPhotoToServer = async (uri: string, fileName: string): Promise<string | null> => {
-    try {
-      if (Platform.OS === "web") {
-        return fileName;
-      }
-
-      const base64 = await FileSystem.readAsStringAsync(uri, {
-        encoding: "base64",
-      });
-
-      const response = await fetch(new URL("/api/upload-photo", getApiUrl()).toString(), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          photoBase64: base64,
-          fileName: fileName,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Upload failed");
-      }
-
-      const result = await response.json();
-      console.log("Photo uploaded to server:", result.photoPath);
-      return result.photoPath;
-    } catch (error) {
-      console.error("Error uploading photo:", error);
-      return null;
-    }
-  };
 
   const handleSave = async () => {
     if (!newReading.trim()) {
@@ -367,31 +357,58 @@ export default function ReadingEntryScreen() {
       console.log("Could not get location:", error);
     }
 
-    const [galleryResult, uploadedPath] = await Promise.all([
-      savePhotoToGallery(photoUri, photoFileName),
-      uploadPhotoToServer(photoUri, photoFileName),
-    ]);
-
-    if (!galleryResult) {
-      console.log("Warning: Could not save photo to gallery");
-    }
+    const uploadedPath = await uploadPhotoToServer(photoUri, photoFileName);
 
     if (!uploadedPath) {
+      const savedLocally = await savePendingReading({
+        meterId: meter.id,
+        readerId: meter.readerId,
+        newReading: readingValue,
+        photoUri: photoUri,
+        photoFileName: photoFileName,
+        notes: notes.trim() || undefined,
+        latitude,
+        longitude,
+      });
+
       setIsSaving(false);
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      Alert.alert("تنبيه", "فشل رفع الصورة. تأكد من اتصال الإنترنت وحاول مرة أخرى.");
+      if (savedLocally) {
+        Alert.alert("تم الحفظ محلياً", "لا يوجد اتصال بالإنترنت. تم حفظ القراءة والصورة محلياً وسيتم مزامنتها لاحقاً.", [
+          { text: "حسناً", onPress: () => goToNextMeter() }
+        ]);
+      } else {
+        Alert.alert("تنبيه", "فشل رفع الصورة وفشل الحفظ محلياً.");
+      }
       return;
     }
 
     setIsSaving(false);
 
-    mutation.mutate({
+    const apiSuccess = await mutation.mutateAsync({
       newReading: readingValue,
       photoPath: uploadedPath,
       notes: notes.trim() || undefined,
       latitude,
       longitude,
-    });
+    }).catch(() => null);
+
+    if (!apiSuccess) {
+       await savePendingReading({
+        meterId: meter.id,
+        readerId: meter.readerId,
+        newReading: readingValue,
+        photoUri: photoUri,
+        photoFileName: photoFileName,
+        photoPath: uploadedPath,
+        notes: notes.trim() || undefined,
+        latitude,
+        longitude,
+      });
+      
+      Alert.alert("تم الحفظ محلياً", "تم رفع الصورة ولكن فشل تحديث السيرفر. تم حفظ البيانات محلياً للمزامنة لاحقاً.", [
+        { text: "حسناً", onPress: () => goToNextMeter() }
+      ]);
+    }
   };
 
   const canSave = newReading.trim().length > 0 && photoUri !== null;

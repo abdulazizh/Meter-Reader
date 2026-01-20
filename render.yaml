@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: meter-reader-backend
+    runtime: node
+    buildCommand: npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false # You will provide this in Render Dashboard
+      - key: DIRECT_URL
+        sync: false # You will provide this in Render Dashboard
+      - key: SESSION_SECRET
+        generateValue: true # Generates a secure random secret
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: EXPO_PUBLIC_DOMAIN
+        sync: false # This will be your Render URL (e.g., app-name.onrender.com)

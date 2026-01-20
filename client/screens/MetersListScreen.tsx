@@ -28,7 +28,10 @@ import { Spacing, BorderRadius, AppColors, Shadows, Typography } from "@/constan
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { apiRequest, getApiUrl } from "@/lib/query-client";
 import { useAuth } from "@/contexts/AuthContext";
+import { getPendingReadings, removePendingReading, PendingReading } from "@/lib/offline-storage";
+import { uploadPhotoToServer } from "@/lib/api-utils";
 import type { MeterWithReading } from "@shared/schema";
+import { Alert } from "react-native";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -191,6 +194,8 @@ export default function MetersListScreen() {
   const { reader } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [refreshing, setRefreshing] = useState(false);
+  const [pendingReadings, setPendingReadings] = useState<PendingReading[]>([]);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const readerId = reader?.id || null;
 
@@ -198,6 +203,23 @@ export default function MetersListScreen() {
     queryKey: ["/api/meters", readerId],
     enabled: !!readerId,
   });
+
+  const loadPending = useCallback(async () => {
+    const pending = await getPendingReadings();
+    setPendingReadings(pending);
+  }, []);
+
+  useEffect(() => {
+    loadPending();
+  }, [loadPending]);
+
+  // Reload pending readings when screen comes into focus
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      loadPending();
+    });
+    return unsubscribe;
+  }, [navigation, loadPending]);
 
   const filteredMeters = meters.filter((meter) => {
     const query = searchQuery.toLowerCase();
@@ -226,6 +248,67 @@ export default function MetersListScreen() {
       allMeters: filteredMeters, 
       currentIndex: index 
     });
+  };
+
+  const handleSync = async () => {
+    if (isSyncing || pendingReadings.length === 0) return;
+
+    setIsSyncing(true);
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const reading of pendingReadings) {
+      try {
+        let photoPath = reading.photoPath;
+        
+        // If it's a skip, we don't have a photoPath or photoUri
+        if (!photoPath && reading.photoUri) {
+          photoPath = (await uploadPhotoToServer(reading.photoUri, reading.photoFileName)) || undefined;
+        }
+
+        if (reading.photoUri && !photoPath) {
+          failCount++;
+          continue;
+        }
+
+        const res = await apiRequest("POST", "/api/readings", {
+          meterId: reading.meterId,
+          readerId: reading.readerId,
+          newReading: reading.newReading,
+          photoPath: photoPath,
+          notes: reading.notes,
+          skipReason: reading.skipReason,
+          latitude: reading.latitude?.toString(),
+          longitude: reading.longitude?.toString(),
+        });
+
+        if (res.ok) {
+          await removePendingReading(reading.id);
+          successCount++;
+        } else {
+          failCount++;
+        }
+      } catch (error) {
+        console.error("Sync error for reading:", reading.id, error);
+        failCount++;
+      }
+    }
+
+    setIsSyncing(false);
+    await loadPending();
+    await refetch();
+
+    if (successCount > 0) {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+
+    if (failCount === 0) {
+      Alert.alert("تمت المزامنة", `تمت مزامنة ${successCount} قراءة بنجاح.`);
+    } else {
+      Alert.alert("تنبيه المزامنة", `تمت مزامنة ${successCount} قراءة، وفشل ${failCount}. تأكد من اتصال الإنترنت وحاول مرة أخرى.`);
+    }
   };
 
   const handleSettingsPress = async () => {
@@ -291,6 +374,29 @@ export default function MetersListScreen() {
             />
           </View>
         </View>
+
+        {pendingReadings.length > 0 && (
+          <Pressable
+            onPress={handleSync}
+            disabled={isSyncing}
+            style={[
+              styles.syncNotification,
+              { backgroundColor: AppColors.accent, borderColor: AppColors.accent }
+            ]}
+          >
+            <View style={styles.syncContent}>
+              <Feather name="refresh-cw" size={18} color="#FFFFFF" style={isSyncing ? styles.syncingIcon : null} />
+              <ThemedText style={styles.syncText}>
+                {isSyncing ? "جاري المزامنة..." : `لديك ${pendingReadings.length} قراءات بانتظار المزامنة`}
+              </ThemedText>
+            </View>
+            {!isSyncing && (
+              <View style={styles.syncBadge}>
+                <ThemedText style={styles.syncBadgeText}>مزامنة الآن</ThemedText>
+              </View>
+            )}
+          </Pressable>
+        )}
       </View>
 
       {isLoading ? (
@@ -506,4 +612,37 @@ const styles = StyleSheet.create({
     marginTop: Spacing.lg,
     fontSize: 16,
   },
+  syncNotification: {
+    marginTop: Spacing.md,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    borderWidth: 1,
+  },
+  syncContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+  },
+  syncText: {
+    color: "#FFFFFF",
+    fontFamily: "Cairo_600SemiBold",
+    fontSize: 14,
+  },
+  syncBadge: {
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.sm,
+  },
+  syncBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontFamily: "Cairo_700Bold",
+  },
+  syncingIcon: {
+    // We could add an animation here if we wanted
+  }
 });

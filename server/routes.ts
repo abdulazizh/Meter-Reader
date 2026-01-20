@@ -2,9 +2,18 @@ import type { Express } from "express";
 import { createServer, type Server } from "node:http";
 import { storage } from "./storage";
 import type { InsertMeter } from "@shared/schema";
-import { Client } from "@replit/object-storage";
+import { createClient } from "@supabase/supabase-js";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.EXPO_PUBLIC_SUPABASE_KEY;
+
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error("Missing Supabase credentials in environment variables");
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseKey);
+
   app.post("/api/login", async (req, res) => {
     try {
       const { username, password } = req.body;
@@ -323,29 +332,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/upload-photo", async (req, res) => {
     try {
       const { photoBase64, fileName } = req.body;
-      
+
       if (!photoBase64 || !fileName) {
         return res.status(400).json({ error: "Missing photo data or filename" });
       }
-      
-      const client = new Client();
-      
+
       const base64Data = photoBase64.replace(/^data:image\/\w+;base64,/, '');
       const buffer = Buffer.from(base64Data, 'base64');
-      
-      const photoPath = `photos/${fileName}`;
-      
-      const { ok, error } = await client.uploadFromBytes(photoPath, buffer);
-      
-      if (!ok) {
+
+      const photoPath = `${fileName}`;
+
+      const { data, error } = await supabase.storage
+        .from('photos')
+        .upload(photoPath, buffer, {
+          contentType: 'image/jpeg',
+          upsert: true
+        });
+
+      if (error) {
         console.error("Upload error:", error);
-        return res.status(500).json({ error: "Failed to upload photo" });
+        return res.status(500).json({ error: "Failed to upload photo to Supabase" });
       }
-      
-      res.json({ 
-        success: true, 
-        photoPath,
-        message: "Photo uploaded successfully" 
+
+      res.json({
+        success: true,
+        photoPath: data.path,
+        message: "Photo uploaded successfully"
       });
     } catch (error) {
       console.error("Error uploading photo:", error);
@@ -356,16 +368,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/photo/:path(*)", async (req, res) => {
     try {
       const photoPath = req.params.path;
-      const client = new Client();
-      
-      const result = await client.downloadAsBytes(photoPath);
-      
-      if (!result.ok) {
+
+      const { data, error } = await supabase.storage
+        .from('photos')
+        .download(photoPath);
+
+      if (error || !data) {
+        console.error("Download error:", error);
         return res.status(404).json({ error: "Photo not found" });
       }
-      
+
+      const buffer = Buffer.from(await data.arrayBuffer());
       res.setHeader('Content-Type', 'image/jpeg');
-      res.send(result.value);
+      res.send(buffer);
     } catch (error) {
       console.error("Error fetching photo:", error);
       res.status(500).json({ error: "Failed to fetch photo" });
