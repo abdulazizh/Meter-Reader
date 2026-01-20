@@ -685,6 +685,12 @@
           </select>
         </div>
         <div class="filter-group">
+          <label>الشهر</label>
+          <select id="readings-month-filter" onchange="loadReadingsByMonth()">
+            <option value="">كل الشهور</option>
+          </select>
+        </div>
+        <div class="filter-group">
           <label>من تاريخ</label>
           <input type="date" id="readings-date-from" onchange="filterReadings()">
         </div>
@@ -713,10 +719,40 @@
             <th>الموقع</th>
             <th>الصورة</th>
             <th>الملاحظات</th>
+            <th>الإجراءات</th>
           </tr>
         </thead>
         <tbody id="readings-body"></tbody>
       </table>
+    </div>
+
+    <!-- Edit Reading Modal -->
+    <div class="modal" id="edit-reading-modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>تعديل القراءة</h3>
+          <button class="modal-close" onclick="closeEditReadingModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="edit-reading-id">
+          <div class="form-group">
+            <label>القراءة الجديدة</label>
+            <input type="number" id="edit-reading-value" placeholder="أدخل القراءة">
+          </div>
+          <div class="form-group">
+            <label>سبب التخطي</label>
+            <input type="text" id="edit-reading-skip-reason" placeholder="سبب التخطي (اختياري)">
+          </div>
+          <div class="form-group">
+            <label>الملاحظات</label>
+            <textarea id="edit-reading-notes" rows="3" placeholder="الملاحظات (اختياري)"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="closeEditReadingModal()">إلغاء</button>
+          <button class="btn btn-primary" onclick="saveReadingEdit()">حفظ التعديلات</button>
+        </div>
+      </div>
     </div>
 
     <!-- Import Panel -->
@@ -919,6 +955,7 @@
     });
 
     async function loadData() {
+      populateMonthFilter();
       await Promise.all([loadReaders(), loadMeters(), loadReadings()]);
       renderMeters();
       renderReadings();
@@ -954,6 +991,7 @@
       try {
         const response = await fetch('/api/admin/readings');
         allReadings = await response.json();
+        renderReadings();
       } catch (error) {
         showError('فشل تحميل القراءات');
       }
@@ -1044,6 +1082,10 @@
             <td>${locationLink}</td>
             <td>${photoLink}</td>
             <td>${reading.notes || '-'}</td>
+            <td class="actions">
+              <button class="btn btn-sm btn-secondary" onclick="editReading('${reading.id}')">تعديل</button>
+              <button class="btn btn-sm btn-danger" onclick="deleteReading('${reading.id}')">حذف</button>
+            </td>
           </tr>
         `;
       }).join('');
@@ -1180,12 +1222,13 @@
       document.getElementById('readings-type-filter').value = '';
       document.getElementById('readings-photo-filter').value = '';
       document.getElementById('readings-location-filter').value = '';
+      document.getElementById('readings-month-filter').value = '';
       document.getElementById('readings-date-from').value = '';
       document.getElementById('readings-date-to').value = '';
       readingsSortField = 'readingDate';
       readingsSortDir = 'desc';
       updateSortIndicators('readings-table', readingsSortField, readingsSortDir);
-      renderReadings();
+      loadReadings();
     }
     
     function updateSortIndicators(tableId, field, dir) {
@@ -1374,6 +1417,98 @@
         loadMeters();
       } catch (error) {
         showError('فشل حذف العداد');
+      }
+    }
+
+    function editReading(id) {
+      const reading = allReadings.find(r => r.id === id);
+      if (!reading) return;
+      
+      document.getElementById('edit-reading-id').value = id;
+      document.getElementById('edit-reading-value').value = reading.newReading || '';
+      document.getElementById('edit-reading-skip-reason').value = reading.skipReason || '';
+      document.getElementById('edit-reading-notes').value = reading.notes || '';
+      
+      document.getElementById('edit-reading-modal').classList.add('active');
+    }
+
+    function closeEditReadingModal() {
+      document.getElementById('edit-reading-modal').classList.remove('active');
+    }
+
+    async function saveReadingEdit() {
+      const id = document.getElementById('edit-reading-id').value;
+      const newReading = document.getElementById('edit-reading-value').value;
+      const skipReason = document.getElementById('edit-reading-skip-reason').value;
+      const notes = document.getElementById('edit-reading-notes').value;
+      
+      try {
+        const response = await fetch(`/api/admin/readings/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            newReading: newReading ? parseInt(newReading) : null,
+            skipReason: skipReason || null,
+            notes: notes || null,
+          })
+        });
+        if (!response.ok) throw new Error();
+        showSuccess('تم تحديث القراءة');
+        closeEditReadingModal();
+        loadReadings();
+      } catch (error) {
+        showError('فشل تحديث القراءة');
+      }
+    }
+
+    async function deleteReading(id) {
+      if (!confirm('هل أنت متأكد من حذف هذه القراءة؟')) return;
+      try {
+        const response = await fetch(`/api/admin/readings/${id}`, { method: 'DELETE' });
+        if (!response.ok) throw new Error();
+        showSuccess('تم حذف القراءة');
+        loadReadings();
+      } catch (error) {
+        showError('فشل حذف القراءة');
+      }
+    }
+
+    function populateMonthFilter() {
+      const select = document.getElementById('readings-month-filter');
+      const months = [
+        'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
+        'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'
+      ];
+      const currentYear = new Date().getFullYear();
+      const currentMonth = new Date().getMonth() + 1;
+      
+      select.innerHTML = '<option value="">كل الشهور</option>';
+      for (let y = currentYear; y >= currentYear - 2; y--) {
+        const maxMonth = (y === currentYear) ? currentMonth : 12;
+        for (let m = maxMonth; m >= 1; m--) {
+          select.innerHTML += `<option value="${y}-${m}">${months[m-1]} ${y}</option>`;
+        }
+      }
+    }
+
+    async function loadReadingsByMonth() {
+      const filter = document.getElementById('readings-month-filter').value;
+      if (!filter) {
+        loadReadings();
+        return;
+      }
+      
+      const [year, month] = filter.split('-');
+      document.getElementById('readings-loading').style.display = 'block';
+      
+      try {
+        const response = await fetch(`/api/admin/readings?year=${year}&month=${month}`);
+        allReadings = await response.json();
+        renderReadings();
+      } catch (error) {
+        showError('فشل تحميل القراءات');
+      } finally {
+        document.getElementById('readings-loading').style.display = 'none';
       }
     }
 
