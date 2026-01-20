@@ -293,7 +293,7 @@ export default function ReadingEntryScreen() {
       }
 
       const base64 = await FileSystem.readAsStringAsync(uri, {
-        encoding: FileSystem.EncodingType.Base64,
+        encoding: "base64",
       });
 
       const response = await fetch(new URL("/api/upload-photo", getApiUrl()).toString(), {
@@ -616,18 +616,23 @@ export default function ReadingEntryScreen() {
         <View style={styles.saveSection}>
           <Pressable
             onPress={handleSave}
-            disabled={!canSave || mutation.isPending}
+            disabled={!canSave || mutation.isPending || isSaving}
             style={[
               styles.saveButton,
               {
                 backgroundColor: canSave ? AppColors.primary : theme.pending,
-                opacity: mutation.isPending ? 0.7 : 1,
+                opacity: (mutation.isPending || isSaving) ? 0.7 : 1,
               },
             ]}
             testID="button-save"
           >
-            {mutation.isPending ? (
-              <ActivityIndicator color="#FFFFFF" />
+            {(mutation.isPending || isSaving) ? (
+              <View style={styles.savingIndicator}>
+                <ActivityIndicator color="#FFFFFF" />
+                <ThemedText style={styles.saveButtonText}>
+                  {isSaving ? "جاري رفع الصورة..." : "جاري الحفظ..."}
+                </ThemedText>
+              </View>
             ) : (
               <>
                 <Feather name="check" size={22} color="#FFFFFF" />
@@ -983,6 +988,11 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 18,
     fontFamily: "Cairo_700Bold",
+  },
+  savingIndicator: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
   },
   navigationSection: {
     marginTop: Spacing.xl,

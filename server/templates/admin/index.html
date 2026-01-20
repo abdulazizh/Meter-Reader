@@ -441,6 +441,20 @@
       color: #0c5460;
     }
     
+    .photo-link {
+      text-decoration: none;
+    }
+    
+    .photo-link:hover .badge {
+      opacity: 0.8;
+      transform: scale(1.05);
+    }
+    
+    .photo-link .badge {
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+    
     .search-box {
       display: flex;
       gap: 10px;
@@ -1013,7 +1027,9 @@
         const newReading = reading.newReading || 0;
         const difference = reading.newReading !== null ? (newReading - prevReading) : '-';
         const photoLink = reading.photoPath ? 
-          `<span class="badge badge-success" title="${reading.photoPath}">متوفرة</span>` : 
+          `<a href="/api/photo/${reading.photoPath}" target="_blank" class="photo-link" title="عرض الصورة">
+            <span class="badge badge-success">عرض الصورة</span>
+          </a>` : 
           `<span class="badge badge-warning">غير متوفرة</span>`;
         return `
           <tr>
@@ -1391,7 +1407,7 @@
                 const hasLoc = r.latitude && r.longitude;
                 const locLink = hasLoc ? 
                   '<a href="https://www.google.com/maps?q=' + r.latitude + ',' + r.longitude + '" target="_blank" style="color: #1e5799;">خريطة</a>' : '-';
-                const photoStatus = r.photoPath ? '<span class="badge badge-success">متوفرة</span>' : '<span class="badge badge-warning">لا</span>';
+                const photoStatus = r.photoPath ? '<a href="/api/photo/' + r.photoPath + '" target="_blank" class="photo-link"><span class="badge badge-success">عرض الصورة</span></a>' : '<span class="badge badge-warning">لا</span>';
                 return '<tr><td style="padding: 8px;">' + rDate + ' ' + rTime + '</td><td style="padding: 8px; font-weight: bold;">' + (r.newReading !== null ? r.newReading.toLocaleString('ar-IQ') : '-') + '</td><td style="padding: 8px;">' + (r.skipReason || '-') + '</td><td style="padding: 8px;">' + locLink + '</td><td style="padding: 8px;">' + photoStatus + '</td><td style="padding: 8px;">' + (r.notes || '-') + '</td></tr>';
               }).join('')}
             </tbody>
