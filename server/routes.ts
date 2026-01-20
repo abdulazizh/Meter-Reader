@@ -5,6 +5,38 @@ import type { InsertMeter } from "@shared/schema";
 import { Client } from "@replit/object-storage";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  app.post("/api/login", async (req, res) => {
+    try {
+      const { username, password } = req.body;
+      
+      if (!username || !password) {
+        return res.status(400).json({ success: false, error: "اسم المستخدم وكلمة المرور مطلوبان" });
+      }
+      
+      const reader = await storage.getReaderByUsername(username);
+      
+      if (!reader) {
+        return res.status(401).json({ success: false, error: "اسم المستخدم غير موجود" });
+      }
+      
+      if (reader.password !== password) {
+        return res.status(401).json({ success: false, error: "كلمة المرور غير صحيحة" });
+      }
+      
+      res.json({
+        success: true,
+        reader: {
+          id: reader.id,
+          username: reader.username,
+          displayName: reader.displayName,
+        },
+      });
+    } catch (error) {
+      console.error("Login error:", error);
+      res.status(500).json({ success: false, error: "حدث خطأ في الخادم" });
+    }
+  });
+
   app.get("/api/meters/:readerId", async (req, res) => {
     try {
       const { readerId } = req.params;
