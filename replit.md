@@ -72,6 +72,14 @@ Photos are handled with dual storage:
    - Photos can be retrieved via `/api/photo/:path` endpoint
    - Admin panel displays clickable links to view photos
 
+### Admin Panel Features
+Located at `/admin` on the backend server (port 5000):
+- **Readings Management**: Edit and delete individual readings
+- **Month Filtering**: Filter readings by specific month (current year + 2 previous years)
+- **Multiple Filters**: Search, reader, type (reading/skipped), photo status, location status, date range
+- **Sortable Columns**: Click column headers to sort ascending/descending
+- **Export Options**: Excel export for readers, meters, and readings data
+
 ### Third-Party Services
 - **Google Fonts**: Cairo font family loaded via @expo-google-fonts/cairo
 
