@@ -2,6 +2,7 @@
   "name": "my-app",
   "main": "client/index.js",
   "version": "1.0.0",
+  "type": "module",
   "scripts": {
     "expo:dev": "cross-env EXPO_PUBLIC_DOMAIN=http://localhost:5000 npx expo start",
     "server:dev": "cross-env NODE_ENV=development tsx --env-file=.env server/index.ts",
@@ -71,16 +72,16 @@
     "ws": "^8.18.0",
     "xlsx": "^0.18.5",
     "zod": "^3.24.2",
-    "zod-validation-error": "^3.4.0"
+    "zod-validation-error": "^3.4.0",
+    "esbuild": "^0.27.2",
+    "cross-env": "^10.1.0",
+    "drizzle-kit": "^0.31.4"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",
     "@types/node": "24.10.0",
     "@types/react": "~19.1.0",
     "babel-plugin-module-resolver": "^5.0.2",
-    "cross-env": "^10.1.0",
-    "drizzle-kit": "^0.31.4",
-    "esbuild": "^0.27.2",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~10.0.0",
     "eslint-config-prettier": "^10.1.8",
