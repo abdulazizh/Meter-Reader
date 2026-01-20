@@ -19,6 +19,8 @@ import { Feather } from "@expo/vector-icons";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import * as Location from "expo-location";
+import * as MediaLibrary from "expo-media-library";
+import * as FileSystem from "expo-file-system";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import Animated, {
   FadeIn,
@@ -33,7 +35,7 @@ import { Button } from "@/components/Button";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius, AppColors, Shadows, Typography } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
-import { apiRequest } from "@/lib/query-client";
+import { apiRequest, getApiUrl } from "@/lib/query-client";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -62,6 +64,8 @@ export default function ReadingEntryScreen() {
   const [otherReason, setOtherReason] = useState("");
 
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const [mediaLibraryPermission, requestMediaLibraryPermission] = MediaLibrary.usePermissions();
+  const [isSaving, setIsSaving] = useState(false);
 
   const hasPrevious = currentIndex > 0;
   const hasNext = currentIndex < allMeters.length - 1;
@@ -249,6 +253,73 @@ export default function ReadingEntryScreen() {
     }
   };
 
+  const savePhotoToGallery = async (uri: string, fileName: string): Promise<boolean> => {
+    try {
+      if (Platform.OS === "web") {
+        return true;
+      }
+
+      if (!mediaLibraryPermission?.granted) {
+        const { granted } = await requestMediaLibraryPermission();
+        if (!granted) {
+          console.log("Media library permission not granted");
+          return false;
+        }
+      }
+
+      const asset = await MediaLibrary.createAssetAsync(uri);
+      
+      const albumName = "قراءات الكهرباء";
+      let album = await MediaLibrary.getAlbumAsync(albumName);
+      
+      if (!album) {
+        await MediaLibrary.createAlbumAsync(albumName, asset, false);
+      } else {
+        await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
+      }
+      
+      console.log("Photo saved to gallery:", fileName);
+      return true;
+    } catch (error) {
+      console.error("Error saving photo to gallery:", error);
+      return false;
+    }
+  };
+
+  const uploadPhotoToServer = async (uri: string, fileName: string): Promise<string | null> => {
+    try {
+      if (Platform.OS === "web") {
+        return fileName;
+      }
+
+      const base64 = await FileSystem.readAsStringAsync(uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+
+      const response = await fetch(new URL("/api/upload-photo", getApiUrl()).toString(), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          photoBase64: base64,
+          fileName: fileName,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Upload failed");
+      }
+
+      const result = await response.json();
+      console.log("Photo uploaded to server:", result.photoPath);
+      return result.photoPath;
+    } catch (error) {
+      console.error("Error uploading photo:", error);
+      return null;
+    }
+  };
+
   const handleSave = async () => {
     if (!newReading.trim()) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
@@ -275,9 +346,10 @@ export default function ReadingEntryScreen() {
       return;
     }
 
-    const photoFileName = photoUri
-      ? `${meter.sequence}_${meter.accountNumber}.jpg`
-      : undefined;
+    setIsSaving(true);
+
+    const timestamp = Date.now();
+    const photoFileName = `${meter.accountNumber}_${meter.sequence}_${timestamp}.jpg`;
 
     let latitude: number | undefined;
     let longitude: number | undefined;
@@ -295,9 +367,27 @@ export default function ReadingEntryScreen() {
       console.log("Could not get location:", error);
     }
 
+    const [galleryResult, uploadedPath] = await Promise.all([
+      savePhotoToGallery(photoUri, photoFileName),
+      uploadPhotoToServer(photoUri, photoFileName),
+    ]);
+
+    if (!galleryResult) {
+      console.log("Warning: Could not save photo to gallery");
+    }
+
+    if (!uploadedPath) {
+      setIsSaving(false);
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      Alert.alert("تنبيه", "فشل رفع الصورة. تأكد من اتصال الإنترنت وحاول مرة أخرى.");
+      return;
+    }
+
+    setIsSaving(false);
+
     mutation.mutate({
       newReading: readingValue,
-      photoPath: photoFileName,
+      photoPath: uploadedPath,
       notes: notes.trim() || undefined,
       latitude,
       longitude,
