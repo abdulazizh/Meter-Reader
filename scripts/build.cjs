@@ -99,7 +99,8 @@ async function checkMetroHealth() {
       signal: AbortSignal.timeout(2000),
     });
     const text = await response.text();
-    return response.ok && text.includes("packager-status:ready");
+    // Support both 'ready' and 'running' statuses
+    return response.ok && (text.includes("ready") || text.includes("running"));
   } catch {
     return false;
   }
