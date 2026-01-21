@@ -31,14 +31,13 @@ function setupCors(app: express.Application) {
     }
 
     const origin = req.header("origin");
-
-    // Allow localhost origins for Expo web development (any port)
     const isLocalhost =
       origin?.startsWith("http://localhost:") ||
       origin?.startsWith("http://127.0.0.1:");
 
-    if (origin && (origins.has(origin) || isLocalhost)) {
-      res.header("Access-Control-Allow-Origin", origin);
+    // Allow all origins in production for mobile apps, or specifically localhost/replit for dev
+    if (!origin || origins.has(origin) || isLocalhost || process.env.NODE_ENV === "production") {
+      res.header("Access-Control-Allow-Origin", origin || "*");
       res.header(
         "Access-Control-Allow-Methods",
         "GET, POST, PUT, DELETE, OPTIONS",
