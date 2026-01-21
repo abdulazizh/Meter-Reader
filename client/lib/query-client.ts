@@ -37,7 +37,7 @@ export async function apiRequest(
     method,
     headers: data ? { "Content-Type": "application/json" } : {},
     body: data ? JSON.stringify(data) : undefined,
-    credentials: "include",
+    credentials: baseUrl.includes("localhost") ? "include" : "same-origin",
   });
 
   await throwIfResNotOk(res);
