@@ -153,8 +153,8 @@ async function startMetro(expoPublicDomain) {
 
 async function downloadFile(url, outputPath) {
   const controller = new AbortController();
-  const fiveMinMS = 5 * 60 * 1_000;
-  const timeoutId = setTimeout(() => controller.abort(), fiveMinMS);
+  const tenMinMS = 10 * 60 * 1_000;
+  const timeoutId = setTimeout(() => controller.abort(), tenMinMS);
 
   try {
     console.log(`Downloading: ${url}`);
