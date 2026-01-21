@@ -1,11 +1,11 @@
 {
-  "id": "1769014550561-3504",
-  "createdAt": "2026-01-21T16:55:50.561Z",
+  "id": "ef196416-7331-4461-afc3-f12466f99f9a",
+  "createdAt": "2026-01-21T17:16:06.864Z",
   "runtimeVersion": "exposdk:54.0.0",
   "launchAsset": {
-    "key": "bundle-1769014550561-3504",
+    "key": "bundle-1769015766864-9416",
     "contentType": "application/javascript",
-    "url": "https://meter-reader-backend.onrender.com/1769014550561-3504/_expo/static/js/ios/bundle.js"
+    "url": "https://meter-reader-backend.onrender.com/1769015766864-9416/_expo/static/js/ios/bundle.js"
   },
   "assets": [],
   "metadata": {},
@@ -32,9 +32,9 @@
           "foregroundImage": "./assets/images/android-icon-foreground.png",
           "backgroundImage": "./assets/images/android-icon-background.png",
           "monochromeImage": "./assets/images/android-icon-monochrome.png",
-          "foregroundImageUrl": "https://meter-reader-backend.onrender.com/1769014550561-3504/_expo/static/js/assets/images/android-icon-foreground.png",
-          "monochromeImageUrl": "https://meter-reader-backend.onrender.com/1769014550561-3504/_expo/static/js/assets/images/android-icon-monochrome.png",
-          "backgroundImageUrl": "https://meter-reader-backend.onrender.com/1769014550561-3504/_expo/static/js/assets/images/android-icon-background.png"
+          "foregroundImageUrl": "https://meter-reader-backend.onrender.com/1769015766864-9416/_expo/static/js/assets/images/android-icon-foreground.png",
+          "monochromeImageUrl": "https://meter-reader-backend.onrender.com/1769015766864-9416/_expo/static/js/assets/images/android-icon-monochrome.png",
+          "backgroundImageUrl": "https://meter-reader-backend.onrender.com/1769015766864-9416/_expo/static/js/assets/images/android-icon-background.png"
         },
         "edgeToEdgeEnabled": true,
         "predictiveBackGestureEnabled": false,
@@ -117,7 +117,7 @@
       "androidStatusBar": {
         "backgroundColor": "#1B5E20"
       },
-      "iconUrl": "https://meter-reader-backend.onrender.com/1769014550561-3504/_expo/static/js/assets/images/icon.png",
+      "iconUrl": "https://meter-reader-backend.onrender.com/1769015766864-9416/_expo/static/js/assets/images/icon.png",
       "hostUri": "meter-reader-backend.onrender.com/ios"
     },
     "expoGo": {
