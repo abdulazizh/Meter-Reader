@@ -7,7 +7,7 @@
     "expo:dev": "cross-env EXPO_PUBLIC_DOMAIN=http://localhost:5000 npx expo start",
     "server:dev": "cross-env NODE_ENV=development tsx --env-file=.env server/index.ts",
     "expo:start:static:build": "npx expo start --no-dev --minify --localhost",
-    "expo:static:build": "node scripts/build.js",
+    "expo:static:build": "node --env-file=.env scripts/build.cjs",
     "server:build": "npx esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=server_dist --alias:@shared=./shared",
     "server:prod": "cross-env NODE_ENV=production node server_dist/index.js",
     "build": "npm install && npm run server:build && npm run db:push",
