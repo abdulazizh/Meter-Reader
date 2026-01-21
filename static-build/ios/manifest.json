@@ -1,11 +1,11 @@
 {
-  "id": "67c021e5-3e83-46f2-b86f-6d480846e5ff",
-  "createdAt": "2026-01-21T11:24:36.095Z",
+  "id": "5848dafa-5fd9-4401-ab14-4a519e0b9ede",
+  "createdAt": "2026-01-21T13:14:36.499Z",
   "runtimeVersion": "exposdk:54.0.0",
   "launchAsset": {
-    "key": "bundle-1768994676095-20964",
+    "key": "bundle-1769001276499-23612",
     "contentType": "application/javascript",
-    "url": "https://meter-reader-backend.onrender.com/1768994676095-20964/_expo/static/js/ios/bundle.js"
+    "url": "https://meter-reader-backend.onrender.com/1769001276499-23612/_expo/static/js/ios/bundle.js"
   },
   "assets": [],
   "metadata": {},

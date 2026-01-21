@@ -52,9 +52,10 @@ export default function LoginScreen() {
         Alert.alert('خطأ', data.error || 'فشل تسجيل الدخول');
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Login error:', error);
-      Alert.alert('خطأ', 'حدث خطأ في الاتصال بالخادم');
+      const isNetworkError = error?.message?.includes('Network request failed') || error?.message?.includes('fetch');
+      Alert.alert('خطأ', isNetworkError ? 'لا يوجد اتصال بالسيرفر. يرجى التأكد من الإنترنت أو أن السيرفر يعمل.' : 'حدث خطأ في الاتصال بالخادم');
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setIsLoading(false);

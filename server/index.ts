@@ -35,15 +35,26 @@ function setupCors(app: express.Application) {
       origin?.startsWith("http://localhost:") ||
       origin?.startsWith("http://127.0.0.1:");
 
-    // Allow all origins in production for mobile apps, or specifically localhost/replit for dev
     if (!origin || origins.has(origin) || isLocalhost || process.env.NODE_ENV === "production") {
-      res.header("Access-Control-Allow-Origin", origin || "*");
+      // Credentials 'include' needs a specific origin, cannot be '*'
+      if (origin) {
+        res.header("Access-Control-Allow-Origin", origin);
+      } else {
+        // If no origin (mobile app), we allow it but cannot use '*' with credentials
+        // Usually mobile apps don't set an origin header
+        res.header("Access-Control-Allow-Origin", "*");
+      }
+      
       res.header(
         "Access-Control-Allow-Methods",
         "GET, POST, PUT, DELETE, OPTIONS",
       );
       res.header("Access-Control-Allow-Headers", "Content-Type");
-      res.header("Access-Control-Allow-Credentials", "true");
+      
+      // Only set credentials true if we have a specific origin
+      if (origin) {
+        res.header("Access-Control-Allow-Credentials", "true");
+      }
     }
 
     if (req.method === "OPTIONS") {
@@ -179,8 +190,14 @@ function configureExpoAndLanding(app: express.Application) {
       return next();
     }
 
-    if (req.path !== "/" && req.path !== "/manifest") {
-      return next();
+    const path = req.path.replace(/\/$/, "");
+
+    if (path === "/android" || (path === "/manifest" && req.header("expo-platform") === "android")) {
+      return serveExpoManifest("android", res);
+    }
+
+    if (path === "/ios" || (path === "/manifest" && req.header("expo-platform") === "ios")) {
+      return serveExpoManifest("ios", res);
     }
 
     const platform = req.header("expo-platform");
