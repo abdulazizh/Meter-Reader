@@ -484,9 +484,17 @@ function updateManifests(manifests, timestamp, baseUrl, assetsByHash) {
       });
     }
 
+    // Replace all local asset URLs in the entire manifest object
+    const manifestString = JSON.stringify(manifest);
+    const updatedManifestString = manifestString.replace(
+      /http:\/\/(localhost|127\.0\.0\.1):8081\/assets\//g,
+      `${baseUrl}/${timestamp}/_expo/static/js/`
+    );
+    const finalManifest = JSON.parse(updatedManifestString);
+
     fs.writeFileSync(
       path.join("static-build", platform, "manifest.json"),
-      JSON.stringify(manifest, null, 2),
+      JSON.stringify(finalManifest, null, 2),
     );
   };
 
