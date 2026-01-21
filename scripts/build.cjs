@@ -95,10 +95,11 @@ function clearMetroCache() {
 
 async function checkMetroHealth() {
   try {
-    const response = await fetch("http://localhost:8081/status", {
-      signal: AbortSignal.timeout(5000),
+    const response = await fetch("http://127.0.0.1:8081/status", {
+      signal: AbortSignal.timeout(2000),
     });
-    return response.ok;
+    const text = await response.text();
+    return response.ok && text.includes("packager-status:ready");
   } catch {
     return false;
   }
@@ -137,7 +138,7 @@ async function startMetro(expoPublicDomain) {
     });
   }
 
-  for (let i = 0; i < 60; i++) {
+  for (let i = 0; i < 180; i++) {
     await new Promise((resolve) => setTimeout(resolve, 1000));
 
     const healthy = await checkMetroHealth();
@@ -145,9 +146,13 @@ async function startMetro(expoPublicDomain) {
       console.log("Metro ready");
       return;
     }
+    
+    if (i > 0 && i % 10 === 0) {
+      console.log(`Still waiting for Metro... (${i}s)`);
+    }
   }
 
-  console.error("Metro timeout");
+  console.error("Metro timeout - check if port 8081 is accessible");
   process.exit(1);
 }
 
@@ -188,7 +193,7 @@ async function downloadFile(url, outputPath) {
 }
 
 async function downloadBundle(platform, timestamp) {
-  const url = new URL("http://localhost:8081/client/index.bundle");
+  const url = new URL("http://127.0.0.1:8081/client/index.bundle");
   url.searchParams.set("platform", platform);
   url.searchParams.set("dev", "false");
   url.searchParams.set("hot", "false");
@@ -212,17 +217,18 @@ async function downloadBundle(platform, timestamp) {
 
 async function downloadManifest(platform) {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 300_000);
+  const timeoutId = setTimeout(() => controller.abort(), 60000); // 1 minute for manifest
 
   try {
     console.log(`Fetching ${platform} manifest...`);
-    const response = await fetch("http://localhost:8081/manifest", {
+    // Use 127.0.0.1 to avoid DNS issues with 'localhost' in Node 18+
+    const response = await fetch("http://127.0.0.1:8081/manifest", {
       headers: { "expo-platform": platform },
       signal: controller.signal,
     });
 
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+      throw new Error(`HTTP ${response.status} ${response.statusText}`);
     }
 
     const manifest = await response.json();
@@ -231,7 +237,7 @@ async function downloadManifest(platform) {
   } catch (error) {
     if (error.name === "AbortError") {
       throw new Error(
-        `Manifest download timeout after 5m for platform: ${platform}`,
+        `Manifest download timeout after 60s for platform: ${platform}`,
       );
     }
     throw error;
@@ -319,7 +325,7 @@ function extractAssets(timestamp) {
       const originalPath = match[1];
       const filename = match[3] + "." + match[4];
 
-      const tempUrl = new URL(`http://localhost:8081${originalPath}`);
+      const tempUrl = new URL(`http://127.0.0.1:8081${originalPath}`);
       const unstablePath = tempUrl.searchParams.get("unstable_path");
 
       if (!unstablePath) {
@@ -363,7 +369,7 @@ async function downloadAssets(assets, timestamp) {
   const downloadPromises = assets.map(async (asset) => {
     const platform = Array.from(asset.platforms)[0];
 
-    const tempUrl = new URL(`http://localhost:8081${asset.originalPath}`);
+    const tempUrl = new URL(`http://127.0.0.1:8081${asset.originalPath}`);
     const unstablePath = tempUrl.searchParams.get("unstable_path");
 
     if (!unstablePath) {
@@ -372,7 +378,7 @@ async function downloadAssets(assets, timestamp) {
 
     const decodedPath = decodeURIComponent(unstablePath);
     const metroUrl = new URL(
-      `http://localhost:8081${path.posix.join("/assets", decodedPath, asset.filename)}`,
+      `http://127.0.0.1:8081${path.posix.join("/assets", decodedPath, asset.filename)}`,
     );
     metroUrl.searchParams.set("platform", platform);
     metroUrl.searchParams.set("hash", asset.hash);
@@ -431,7 +437,7 @@ function updateBundleUrls(timestamp, baseUrl) {
     bundle = bundle.replace(
       /httpServerLocation:"(\/[^"]+)"/g,
       (_match, capturedPath) => {
-        const tempUrl = new URL(`http://localhost:8081${capturedPath}`);
+        const tempUrl = new URL(`http://127.0.0.1:8081${capturedPath}`);
         const unstablePath = tempUrl.searchParams.get("unstable_path");
 
         if (!unstablePath) {
@@ -459,6 +465,7 @@ function updateManifests(manifests, timestamp, baseUrl, assetsByHash) {
       exitWithError(`Malformed manifest for ${platform}`);
     }
 
+    manifest.id = timestamp;
     manifest.launchAsset.url = `${baseUrl}/${timestamp}/_expo/static/js/${platform}/bundle.js`;
     manifest.launchAsset.key = `bundle-${timestamp}`;
     manifest.createdAt = new Date(

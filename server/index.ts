@@ -25,7 +25,7 @@ function setupCors(app: express.Application) {
     }
 
     if (process.env.REPLIT_DOMAINS) {
-      process.env.REPLIT_DOMAINS.split(",").forEach((d) => {
+      process.env.REPLIT_DOMAINS.split(",").forEach((d: string) => {
         origins.add(`https://${d.trim()}`);
       });
     }
@@ -130,17 +130,26 @@ function serveExpoManifest(platform: string, res: Response) {
   );
 
   if (!fs.existsSync(manifestPath)) {
+    log(`ERROR: Manifest not found for ${platform} at ${manifestPath}`);
     return res
       .status(404)
       .json({ error: `Manifest not found for platform: ${platform}` });
   }
 
+  const manifestContent = fs.readFileSync(manifestPath, "utf-8");
+  
+  // Set required Expo Updates protocol headers
   res.setHeader("expo-protocol-version", "1");
   res.setHeader("expo-sfv-version", "0");
-  res.setHeader("content-type", "application/json");
+  res.setHeader("cache-control", "private, no-cache, no-store, must-revalidate");
+  res.setHeader("pragma", "no-cache");
+  res.setHeader("expires", "0");
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Expose-Headers", "expo-protocol-version, expo-sfv-version");
+  res.setHeader("content-type", "application/json; charset=utf-8");
 
-  const manifest = fs.readFileSync(manifestPath, "utf-8");
-  res.send(manifest);
+  log(`Serving manifest for ${platform} (${manifestContent.length} bytes)`);
+  res.send(manifestContent);
 }
 
 function serveLandingPage({
@@ -190,18 +199,34 @@ function configureExpoAndLanding(app: express.Application) {
       return next();
     }
 
-    const path = req.path.replace(/\/$/, "");
+    // Set Expo protocol headers if requested or if it's an Expo path
+    const isExpoRequest = req.header("expo-protocol-version") || 
+                         req.path.includes("_expo") || 
+                         req.path.includes("bundle.js") ||
+                         req.path === "/android" || 
+                         req.path === "/ios" || 
+                         req.path === "/manifest";
 
-    if (path === "/android" || (path === "/manifest" && req.header("expo-platform") === "android")) {
+    if (isExpoRequest) {
+      res.setHeader("expo-protocol-version", "1");
+      res.setHeader("expo-sfv-version", "0");
+    }
+
+    const path = req.path.replace(/\/$/, "");
+    const platform = req.header("expo-platform") || req.query.platform as string;
+
+    if (path === "/android" || (path === "/manifest" && platform === "android")) {
+      log(`Manifest request for android from ${req.ip}`);
       return serveExpoManifest("android", res);
     }
 
-    if (path === "/ios" || (path === "/manifest" && req.header("expo-platform") === "ios")) {
+    if (path === "/ios" || (path === "/manifest" && platform === "ios")) {
+      log(`Manifest request for ios from ${req.ip}`);
       return serveExpoManifest("ios", res);
     }
 
-    const platform = req.header("expo-platform");
     if (platform && (platform === "ios" || platform === "android")) {
+      log(`Manifest request for ${platform} via header/query from ${req.ip}`);
       return serveExpoManifest(platform, res);
     }
 
@@ -214,11 +239,47 @@ function configureExpoAndLanding(app: express.Application) {
       });
     }
 
+    // Log other requests to see what Expo Go is looking for
+    if (req.path.includes("_expo") || req.path.includes("bundle.js")) {
+      log(`Expo asset request: ${req.path}`);
+    }
+
+    next();
+  });
+
+  // Logger for Expo assets to track what Expo Go is requesting
+  app.use((req, res, next) => {
+    if (req.path.includes("_expo") || req.path.includes("bundle.js")) {
+      const fullPath = path.join(process.cwd(), "static-build", req.path);
+      const exists = fs.existsSync(fullPath);
+      log(`Expo Asset Request: ${req.path} - Exists: ${exists} - IP: ${req.ip}`);
+      
+      // Ensure protocol headers and CORS for assets
+      res.setHeader("expo-protocol-version", "1");
+      res.setHeader("expo-sfv-version", "0");
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      
+      if (!exists) {
+        log(`CRITICAL: Expo asset not found at ${fullPath}`);
+      }
+    }
     next();
   });
 
   app.use("/assets", express.static(path.resolve(process.cwd(), "assets")));
-  app.use(express.static(path.resolve(process.cwd(), "static-build")));
+  app.use(express.static(path.resolve(process.cwd(), "static-build"), {
+    setHeaders: (res, path) => {
+      if (path.endsWith(".js")) {
+        res.setHeader("Content-Type", "application/javascript; charset=utf-8");
+      }
+      if (path.endsWith(".json")) {
+        res.setHeader("Content-Type", "application/json; charset=utf-8");
+      }
+      // Add Expo headers to static files too
+      res.setHeader("expo-protocol-version", "1");
+      res.setHeader("expo-sfv-version", "0");
+    }
+  }));
 
   log("Expo routing: Checking expo-platform header on / and /manifest");
 }
