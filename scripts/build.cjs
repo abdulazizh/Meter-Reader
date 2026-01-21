@@ -484,12 +484,12 @@ function updateManifests(manifests, timestamp, baseUrl, assetsByHash) {
       });
     }
 
-    // Replace all local asset URLs in the entire manifest object
+    // Replace all local asset URLs and clean up relative paths
     const manifestString = JSON.stringify(manifest);
-    const updatedManifestString = manifestString.replace(
-      /http:\/\/(localhost|127\.0\.0\.1):8081\/assets\//g,
-      `${baseUrl}/${timestamp}/_expo/static/js/`
-    );
+    const updatedManifestString = manifestString
+      .replace(/http:\/\/(localhost|127\.0\.0\.1):8081\/assets\/\.\//g, `${baseUrl}/${timestamp}/_expo/static/js/`)
+      .replace(/http:\/\/(localhost|127\.0\.0\.1):8081\/assets\//g, `${baseUrl}/${timestamp}/_expo/static/js/`);
+      
     const finalManifest = JSON.parse(updatedManifestString);
 
     fs.writeFileSync(
