@@ -1,0 +1,136 @@
+{
+  "id": "382a64fe-156e-4836-9146-da2e350facbb",
+  "createdAt": "2026-01-21T13:54:23.707Z",
+  "runtimeVersion": "exposdk:54.0.0",
+  "launchAsset": {
+    "key": "bundle-1769003663707-22904",
+    "contentType": "application/javascript",
+    "url": "https://meter-reader-backend.onrender.com/1769003663707-22904/_expo/static/js/ios/bundle.js"
+  },
+  "assets": [],
+  "metadata": {},
+  "extra": {
+    "eas": {
+      "projectId": "ed26c65d-0d51-4f8a-9893-abaea0c9048a"
+    },
+    "expoClient": {
+      "name": "قراءات المشتركين",
+      "slug": "meter-reader-iraq",
+      "version": "1.0.0",
+      "orientation": "portrait",
+      "icon": "./assets/images/icon.png",
+      "scheme": "meterreader",
+      "userInterfaceStyle": "automatic",
+      "newArchEnabled": true,
+      "ios": {
+        "supportsTablet": true,
+        "bundleIdentifier": "com.meterreader.iraq"
+      },
+      "android": {
+        "adaptiveIcon": {
+          "backgroundColor": "#1B5E20",
+          "foregroundImage": "./assets/images/android-icon-foreground.png",
+          "backgroundImage": "./assets/images/android-icon-background.png",
+          "monochromeImage": "./assets/images/android-icon-monochrome.png",
+          "foregroundImageUrl": "http://127.0.0.1:8081/assets/./assets/images/android-icon-foreground.png",
+          "monochromeImageUrl": "http://127.0.0.1:8081/assets/./assets/images/android-icon-monochrome.png",
+          "backgroundImageUrl": "http://127.0.0.1:8081/assets/./assets/images/android-icon-background.png"
+        },
+        "edgeToEdgeEnabled": true,
+        "predictiveBackGestureEnabled": false,
+        "package": "com.meterreader.iraq",
+        "permissions": [
+          "android.permission.CAMERA",
+          "android.permission.RECORD_AUDIO"
+        ]
+      },
+      "web": {
+        "output": "single",
+        "favicon": "./assets/images/favicon.png"
+      },
+      "plugins": [
+        [
+          "expo-splash-screen",
+          {
+            "image": "./assets/images/splash-icon.png",
+            "imageWidth": 200,
+            "resizeMode": "contain",
+            "backgroundColor": "#1B5E20",
+            "dark": {
+              "backgroundColor": "#1B5E20"
+            }
+          }
+        ],
+        "expo-web-browser",
+        [
+          "expo-camera",
+          {
+            "cameraPermission": "السماح بالوصول للكاميرا لالتقاط صور المشتركين"
+          }
+        ],
+        [
+          "expo-image-picker",
+          {
+            "photosPermission": "السماح بالوصول للصور لاختيار صور المشتركين"
+          }
+        ]
+      ],
+      "experiments": {
+        "reactCompiler": true
+      },
+      "extra": {
+        "eas": {
+          "projectId": "ed26c65d-0d51-4f8a-9893-abaea0c9048a"
+        }
+      },
+      "_internal": {
+        "isDebug": false,
+        "projectRoot": "E:\\2026\\Meter-Reader",
+        "dynamicConfigPath": {},
+        "staticConfigPath": "E:\\2026\\Meter-Reader\\app.json",
+        "packageJsonPath": "E:\\2026\\Meter-Reader\\package.json",
+        "pluginHistory": {
+          "expo-splash-screen": {
+            "name": "expo-splash-screen",
+            "version": "31.0.11"
+          },
+          "expo-web-browser": {
+            "name": "expo-web-browser",
+            "version": "15.0.9"
+          },
+          "expo-camera": {
+            "name": "expo-camera",
+            "version": "17.0.10"
+          },
+          "expo-image-picker": {
+            "name": "expo-image-picker",
+            "version": "17.0.10"
+          }
+        }
+      },
+      "sdkVersion": "54.0.0",
+      "platforms": [
+        "ios",
+        "android",
+        "web"
+      ],
+      "androidStatusBar": {
+        "backgroundColor": "#1B5E20"
+      },
+      "iconUrl": "http://127.0.0.1:8081/assets/./assets/images/icon.png",
+      "hostUri": "meter-reader-backend.onrender.com/ios"
+    },
+    "expoGo": {
+      "debuggerHost": "meter-reader-backend.onrender.com/ios",
+      "developer": {
+        "tool": "expo-cli",
+        "projectRoot": "E:\\2026\\Meter-Reader"
+      },
+      "packagerOpts": {
+        "dev": false
+      },
+      "mainModuleName": "client/index"
+    },
+    "scopeKey": "@anonymous/meter-reader-iraq-bab48be2-e9f6-4a74-93d1-eae72245a504"
+  }
+}
