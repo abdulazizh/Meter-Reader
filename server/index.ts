@@ -34,27 +34,28 @@ function setupCors(app: express.Application) {
     const isLocalhost =
       origin?.startsWith("http://localhost:") ||
       origin?.startsWith("http://127.0.0.1:");
+    const isMobileApp = origin === "app://meter-reader";
 
-    if (!origin || origins.has(origin) || isLocalhost || process.env.NODE_ENV === "production") {
-      // Credentials 'include' needs a specific origin, cannot be '*'
+    // In production or for mobile apps (no origin), we want to be permissive but secure
+    // We explicitly trust our mobile app origin
+    if (!origin || origins.has(origin) || isLocalhost || isMobileApp || process.env.NODE_ENV === "production") {
       if (origin) {
         res.header("Access-Control-Allow-Origin", origin);
+        res.header("Access-Control-Allow-Credentials", "true");
       } else {
-        // If no origin (mobile app), we allow it but cannot use '*' with credentials
-        // Usually mobile apps don't set an origin header
+        // Fallback for older app versions or if origin stripping occurs
         res.header("Access-Control-Allow-Origin", "*");
       }
       
       res.header(
         "Access-Control-Allow-Methods",
-        "GET, POST, PUT, DELETE, OPTIONS",
+        "GET, POST, PUT, DELETE, PATCH, OPTIONS",
       );
-      res.header("Access-Control-Allow-Headers", "Content-Type");
-      
-      // Only set credentials true if we have a specific origin
-      if (origin) {
-        res.header("Access-Control-Allow-Credentials", "true");
-      }
+      res.header(
+        "Access-Control-Allow-Headers", 
+        "Content-Type, Authorization, X-Requested-With, Accept, Origin, expo-platform, expo-protocol-version, expo-sfv-version"
+      );
+      res.header("Access-Control-Expose-Headers", "expo-protocol-version, expo-sfv-version, Set-Cookie");
     }
 
     if (req.method === "OPTIONS") {
@@ -269,6 +270,7 @@ function configureExpoAndLanding(app: express.Application) {
   app.use("/assets", express.static(path.resolve(process.cwd(), "assets")));
   app.use(express.static(path.resolve(process.cwd(), "static-build"), {
     setHeaders: (res, path) => {
+      res.setHeader("Access-Control-Allow-Origin", "*");
       if (path.endsWith(".js")) {
         res.setHeader("Content-Type", "application/javascript; charset=utf-8");
       }
@@ -319,6 +321,17 @@ function setupErrorHandler(app: express.Application) {
   setupRequestLogging(app);
 
   registerAdminRoutes(app);
+  
+  // Health check endpoint
+  app.get("/api/health", (req, res) => {
+    res.json({ 
+      status: "ok", 
+      timestamp: new Date().toISOString(),
+      env: process.env.NODE_ENV,
+      domain: process.env.EXPO_PUBLIC_DOMAIN || "not set"
+    });
+  });
+
   configureExpoAndLanding(app);
 
   const server = await registerRoutes(app);

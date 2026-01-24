@@ -19,8 +19,9 @@ export function getApiUrl(): string {
 }
 
 async function throwIfResNotOk(res: Response) {
-  if (!res.ok && res.status !== 401 && res.status !== 400) {
+  if (!res.ok && res.status !== 401 && res.status !== 400 && res.status !== 422) {
     const text = (await res.text()) || res.statusText;
+    console.error(`API Error (${res.status}):`, text);
     throw new Error(`${res.status}: ${text}`);
   }
 }
@@ -33,11 +34,16 @@ export async function apiRequest(
   const baseUrl = getApiUrl();
   const url = new URL(route, baseUrl);
 
+  const headers: Record<string, string> = {
+    "Origin": "app://meter-reader", // Identify mobile app
+    ...(data ? { "Content-Type": "application/json" } : {}),
+  };
+
   const res = await fetch(url, {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
+    headers,
     body: data ? JSON.stringify(data) : undefined,
-    credentials: baseUrl.includes("localhost") ? "include" : "same-origin",
+    credentials: "include", // Always include cookies for session support
   });
 
   await throwIfResNotOk(res);
@@ -54,6 +60,9 @@ export const getQueryFn: <T>(options: {
     const url = new URL(queryKey.join("/") as string, baseUrl);
 
     const res = await fetch(url, {
+      headers: {
+        "Origin": "app://meter-reader",
+      },
       credentials: "include",
     });
 

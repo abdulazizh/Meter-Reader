@@ -55,7 +55,19 @@ export default function LoginScreen() {
     } catch (error: any) {
       console.error('Login error:', error);
       const isNetworkError = error?.message?.includes('Network request failed') || error?.message?.includes('fetch');
-      Alert.alert('خطأ', isNetworkError ? 'لا يوجد اتصال بالسيرفر. يرجى التأكد من الإنترنت أو أن السيرفر يعمل.' : 'حدث خطأ في الاتصال بالخادم');
+      
+      let errorMessage = 'حدث خطأ في الاتصال بالخادم';
+      if (isNetworkError) {
+        try {
+          const { getApiUrl } = require('@/lib/query-client');
+          const apiUrl = getApiUrl();
+          errorMessage = `لا يوجد اتصال بالسيرفر.\nتأكد من الإنترنت أو أن السيرفر يعمل.\n\nالرابط: ${apiUrl}`;
+        } catch (e) {
+          errorMessage = 'لا يوجد اتصال بالسيرفر. يرجى التأكد من الإنترنت.';
+        }
+      }
+      
+      Alert.alert('خطأ في الاتصال', errorMessage);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setIsLoading(false);
