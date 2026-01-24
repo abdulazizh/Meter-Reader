@@ -31,6 +31,12 @@
       "output": "single",
       "favicon": "./assets/images/favicon.png"
     },
+    "updates": {
+      "url": "https://meter-reader-backend.onrender.com/manifest",
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    },
     "plugins": [
       [
         "expo-splash-screen",
