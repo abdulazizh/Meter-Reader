@@ -11,8 +11,7 @@ import {
   AppState,
   type AppStateStatus,
 } from "react-native";
-// @ts-ignore
-import NetInfo from '@react-native-netinfo/netinfo';
+import NetInfo from '@react-native-community/netinfo';
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";

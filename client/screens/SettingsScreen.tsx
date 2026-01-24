@@ -4,8 +4,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as Sharing from "expo-sharing";
-import * as FileSystem from "expo-file-system";
-import { writeAsStringAsync } from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
+import { writeAsStringAsync } from "expo-file-system/legacy";
 import Constants from 'expo-constants';
 import * as XLSX from "xlsx";
 
