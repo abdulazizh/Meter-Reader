@@ -59,6 +59,7 @@
     "express-session": "^1.18.2",
     "http-proxy-middleware": "^3.0.5",
     "multer": "^2.0.2",
+    "@react-native-netinfo": "^11.4.1",
     "pg": "^8.16.3",
     "react": "19.1.0",
     "react-dom": "19.1.0",

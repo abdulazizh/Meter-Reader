@@ -9,6 +9,8 @@ import {
   Image,
   ActivityIndicator,
 } from "react-native";
+// @ts-ignore
+import NetInfo from '@react-native-netinfo/netinfo';
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -212,6 +214,20 @@ export default function MetersListScreen() {
   useEffect(() => {
     loadPending();
   }, [loadPending]);
+
+  // Monitor network connectivity and sync when connection is restored
+  useEffect(() => {
+    const unsubscribe = NetInfo.addEventListener((state: any) => {
+      if (state.isConnected && !isSyncing && pendingReadings.length > 0) {
+        // Add a small delay to ensure connection is stable
+        setTimeout(() => {
+          handleSync();
+        }, 1000);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [isSyncing, pendingReadings]);
 
   // Reload pending readings when screen comes into focus
   useEffect(() => {
