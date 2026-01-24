@@ -3,6 +3,7 @@ services:
     name: meter-reader-backend
     runtime: node
     buildCommand: |
+      npm install
       npm run server:build
       npm run db:push
     startCommand: npm start
