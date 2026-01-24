@@ -27,6 +27,7 @@ export interface IStorage {
   getLatestReadingByMeterId(meterId: string): Promise<Reading | undefined>;
   createReading(reading: InsertReading): Promise<Reading>;
   updateMeterAfterReading(meterId: string, newReading: number): Promise<void>;
+  deleteAllMeters(): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -174,6 +175,11 @@ export class DatabaseStorage implements IStorage {
   async deleteMeter(id: string): Promise<void> {
     await db.delete(readings).where(eq(readings.meterId, id));
     await db.delete(meters).where(eq(meters.id, id));
+  }
+
+  async deleteAllMeters(): Promise<void> {
+    await db.delete(readings);
+    await db.delete(meters);
   }
 
   async getAllReadings(): Promise<Reading[]> {

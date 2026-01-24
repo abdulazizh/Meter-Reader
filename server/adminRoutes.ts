@@ -1,7 +1,12 @@
 import type { Express, Request, Response, NextFunction } from "express";
+import multer from "multer";
 import { storage } from "./storage";
 import path from "node:path";
 import * as XLSX from "xlsx";
+import type { InsertMeter } from "@shared/schema";
+
+// Multer configuration for file uploads
+const upload = multer({ dest: 'uploads/' });
 
 const ADMIN_USERNAME = "admin";
 const ADMIN_PASSWORD = "admin123";
@@ -132,7 +137,28 @@ export function registerAdminRoutes(app: Express) {
   app.put("/api/admin/meters/:id", requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
-      const meter = await storage.updateMeter(id, req.body);
+      const updateData: Partial<InsertMeter> = {};
+      
+      // Copy all fields from req.body, converting types as needed
+      Object.entries(req.body).forEach(([key, value]) => {
+        switch(key) {
+          case 'address':
+            (updateData as any)[key] = value || "";
+            break;
+          case 'previousReadingDate':
+            if (value === "") {
+              (updateData as any)[key] = undefined;
+            } else if (typeof value === 'string') {
+              (updateData as any)[key] = new Date(value);
+            } else {
+              (updateData as any)[key] = value;
+            }
+            break;
+          default:
+            (updateData as any)[key] = value;
+        }
+      });
+      const meter = await storage.updateMeter(id, updateData);
       res.json(meter);
     } catch (error) {
       console.error("Error updating meter:", error);
@@ -148,6 +174,72 @@ export function registerAdminRoutes(app: Express) {
     } catch (error) {
       console.error("Error deleting meter:", error);
       res.status(500).json({ error: "Failed to delete meter" });
+    }
+  });
+
+  app.delete("/api/admin/meters-all", requireAdmin, async (req, res) => {
+    try {
+      await storage.deleteAllMeters();
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting all meters:", error);
+      res.status(500).json({ error: "Failed to delete all meters" });
+    }
+  });
+
+  // Bulk assign meters to a reader
+  app.post("/api/admin/meters/bulk-assign", requireAdmin, async (req, res) => {
+    try {
+      const { readerId, filterType, filterValue, filterValueEnd } = req.body;
+      
+      if (!readerId) {
+        return res.status(400).json({ error: "Reader ID is required" });
+      }
+      
+      const allMeters = await storage.getAllMeters();
+      let metersToUpdate: string[] = [];
+      
+      if (filterType === "accountRange") {
+        // Filter by account number range
+        const startNum = parseInt(filterValue) || 0;
+        const endNum = parseInt(filterValueEnd) || startNum;
+        metersToUpdate = allMeters
+          .filter(m => {
+            const accNum = parseInt(m.accountNumber);
+            return !isNaN(accNum) && accNum >= startNum && accNum <= endNum;
+          })
+          .map(m => m.id);
+      } else if (filterType === "block") {
+        // Filter by block
+        metersToUpdate = allMeters
+          .filter(m => m.block === filterValue)
+          .map(m => m.id);
+      } else if (filterType === "record") {
+        // Filter by record
+        metersToUpdate = allMeters
+          .filter(m => m.record === filterValue)
+          .map(m => m.id);
+      } else if (filterType === "category") {
+        // Filter by category
+        metersToUpdate = allMeters
+          .filter(m => m.category === filterValue)
+          .map(m => m.id);
+      } else if (filterType === "selected") {
+        // Direct list of meter IDs
+        metersToUpdate = filterValue || [];
+      }
+      
+      // Update each meter
+      let updatedCount = 0;
+      for (const meterId of metersToUpdate) {
+        await storage.updateMeter(meterId, { readerId });
+        updatedCount++;
+      }
+      
+      res.json({ success: true, count: updatedCount });
+    } catch (error) {
+      console.error("Error bulk assigning meters:", error);
+      res.status(500).json({ error: "Failed to bulk assign meters" });
     }
   });
 
@@ -255,8 +347,135 @@ export function registerAdminRoutes(app: Express) {
       res.status(500).json({ error: "Failed to import data" });
     }
   });
+  
+  // New endpoint for Excel file import
+  app.post("/api/admin/import-excel/:type", upload.single('file'), requireAdmin, async (req, res) => {
+    try {
+      const { type } = req.params;
+      
+      if (!req.file) {
+        return res.status(400).json({ error: "File is required" });
+      }
+      
+      // Check if file is Excel
+      const allowedTypes = [
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/octet-stream'
+      ];
+      
+      if (!allowedTypes.some(allowedType => req.file!.mimetype?.includes(allowedType.split('/')[1]))) {
+        return res.status(400).json({ error: "Invalid file type. Only Excel files (.xls, .xlsx) are supported" });
+      }
+      
+      // Parse Excel file
+      const workbook = XLSX.readFile(req.file.path);
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      const jsonData: any[] = XLSX.utils.sheet_to_json(worksheet);
+      
+      if (!Array.isArray(jsonData)) {
+        return res.status(400).json({ error: "Data must be in tabular format" });
+      }
+      
+      // Process the data based on type
+      let count = 0;
+      if (type === "readers") {
+        for (const item of jsonData) {
+          await storage.createReader({
+            username: item['اسم المستخدم'] || item['username'],
+            password: item['كلمة المرور'] || item['password'] || "123456",
+            displayName: item['الاسم الظاهر'] || item['displayName'] || item['username'] || item['اسم المستخدم'] || '',
+          });
+          count++;
+        }
+      } else if (type === "meters") {
+        for (const item of jsonData) {
+          await storage.createMeter({
+            accountNumber: item['رقم الحساب'] || item['accountNumber'],
+            sequence: item['تسلسل'] || item['sequence'] || "001",
+            meterNumber: item['رقم المقياس'] || item['meterNumber'],
+            category: item['الصنف'] || item['category'] || "سكني",
+            subscriberName: item['اسم المشترك'] || item['subscriberName'],
+            record: item['السجل'] || item['record'] || "1",
+            block: item['البلوك'] || item['block'] || "1",
+            property: item['العقار'] || item['property'] || "1",
+            previousReading: parseInt(item['القراءة السابقة'] || item['previousReading']) || 0,
+            previousReadingDate: item['تاريخ القراءة السابقة'] || item['previousReadingDate'] ? new Date(item['تاريخ القراءة السابقة'] || item['previousReadingDate']) : new Date(),
+            currentAmount: item['المبلغ الحالي'] || item['currentAmount'] || "0",
+            debts: item['الديون'] || item['debts'] || "0",
+            totalAmount: item['المجموع'] || item['totalAmount'] || "0",
+            readerId: item['معرف القارئ'] || item['readerId'],
+          });
+          count++;
+        }
+      }
+      
+      res.json({ success: true, count });
+    } catch (error) {
+      console.error("Error importing Excel data:", error);
+      res.status(500).json({ error: "Failed to import Excel data" });
+    }
+  });
 
-  app.get("/api/admin/export/:type", requireAdmin, async (req, res) => {
+  // Endpoint to download Excel templates
+  app.get("/api/admin/template/:type", requireAdmin, async (req, res) => {
+    try {
+      const { type } = req.params;
+      
+      // Define sample data based on type
+      let templateData: any[] = [];
+      let fileName = '';
+      
+      if (type === "readers") {
+        templateData = [
+          { 'اسم المستخدم': 'reader1', 'كلمة المرور': 'password123', 'الاسم الظاهر': 'قارئ أول' },
+          { 'اسم المستخدم': 'reader2', 'كلمة المرور': 'password123', 'الاسم الظاهر': 'قارئ ثاني' },
+        ];
+        fileName = 'template_readers.xlsx';
+      } else if (type === "meters") {
+        templateData = [
+          { 
+            'رقم الحساب': '1001', 
+            'تسلسل': '001', 
+            'رقم المقياس': 'MTR-001', 
+            'الصنف': 'سكني', 
+            'اسم المشترك': 'محمد أحمد', 
+            'السجل': '1', 
+            'البلوك': 'A', 
+            'العقار': '1', 
+            'القراءة السابقة': 1000, 
+            'تاريخ القراءة السابقة': '2024-01-01', 
+            'المبلغ الحالي': '50000', 
+            'الديون': '0', 
+            'المجموع': '50000', 
+            'معرف القارئ': 'reader-id-123' 
+          },
+        ];
+        fileName = 'template_meters.xlsx';
+      } else {
+        return res.status(400).json({ error: "Invalid template type. Use 'readers' or 'meters'" });
+      }
+      
+      // Create Excel workbook
+      const workbook = XLSX.utils.book_new();
+      const worksheet = XLSX.utils.json_to_sheet(templateData);
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Template');
+      
+      // Generate buffer
+      const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+      
+      // Send as attachment
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);
+      res.send(buffer);
+    } catch (error) {
+      console.error("Error generating template:", error);
+      res.status(500).json({ error: "Failed to generate template" });
+    }
+  });
+
+app.get("/api/admin/export/:type", requireAdmin, async (req, res) => {
     try {
       const { type } = req.params;
       const { readerId } = req.query;

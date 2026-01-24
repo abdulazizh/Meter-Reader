@@ -16,7 +16,7 @@ import * as Haptics from 'expo-haptics';
 import { ThemedText } from '@/components/ThemedText';
 import { useTheme } from '@/hooks/useTheme';
 import { Spacing, BorderRadius, AppColors } from '@/constants/theme';
-import { apiRequest } from '@/lib/query-client';
+import { apiRequest, getApiUrl } from '@/lib/query-client';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function LoginScreen() {
@@ -27,6 +27,8 @@ export default function LoginScreen() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  
+  const apiUrl = getApiUrl();
 
   const handleLogin = async () => {
     if (!username.trim() || !password.trim()) {
@@ -59,8 +61,8 @@ export default function LoginScreen() {
       let errorMessage = 'حدث خطأ في الاتصال بالخادم';
       if (isNetworkError) {
         try {
-          const { getApiUrl } = require('@/lib/query-client');
-          const apiUrl = getApiUrl();
+          // const { getApiUrl } = require('@/lib/query-client'); // No longer needed as we imported it
+          // const apiUrl = getApiUrl();
           errorMessage = `لا يوجد اتصال بالسيرفر.\nتأكد من الإنترنت أو أن السيرفر يعمل.\n\nالرابط: ${apiUrl}`;
         } catch (e) {
           errorMessage = 'لا يوجد اتصال بالسيرفر. يرجى التأكد من الإنترنت.';
@@ -160,6 +162,12 @@ export default function LoginScreen() {
         <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.lg }]}>
           <ThemedText style={styles.footerText}>
             وزارة الكهرباء - جمهورية العراق
+          </ThemedText>
+          <ThemedText style={[styles.footerText, { fontSize: 10, marginTop: 4, opacity: 0.5 }]}>
+            v1.1 (Render Fix)
+          </ThemedText>
+          <ThemedText style={[styles.footerText, { fontSize: 10, marginTop: 2, opacity: 0.5 }]}>
+            Server: {apiUrl}
           </ThemedText>
         </View>
       </View>

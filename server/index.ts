@@ -1,6 +1,7 @@
 import express from "express";
 import type { Request, Response, NextFunction } from "express";
 import session from "express-session";
+import multer from "multer";
 import { registerRoutes } from "./routes";
 import { registerAdminRoutes } from "./adminRoutes";
 import * as fs from "fs";
@@ -306,6 +307,9 @@ function setupErrorHandler(app: express.Application) {
 (async () => {
   setupCors(app);
   setupBodyParsing(app);
+  
+  // Multer configuration for file uploads
+  const upload = multer({ dest: 'uploads/' });
   
   app.use(session({
     secret: process.env.SESSION_SECRET || 'dev-secret-key-change-in-production',

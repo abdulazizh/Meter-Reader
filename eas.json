@@ -9,11 +9,18 @@
       "distribution": "internal"
     },
     "preview": {
+      "env": {
+        "EXPO_PUBLIC_DOMAIN": "meter-reader-backend.onrender.com"
+      },
       "android": {
         "buildType": "apk"
       }
     },
-    "production": {}
+    "production": {
+      "env": {
+        "EXPO_PUBLIC_DOMAIN": "meter-reader-backend.onrender.com"
+      }
+    }
   },
   "submit": {
     "production": {}

@@ -5,10 +5,12 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
  * @returns {string} The API base URL
  */
 export function getApiUrl(): string {
-  let host = process.env.EXPO_PUBLIC_DOMAIN;
+  // Fallback to production URL if env var is missing (e.g. in EAS build)
+  let host = process.env.EXPO_PUBLIC_DOMAIN || "meter-reader-backend.onrender.com";
 
   if (!host) {
-    throw new Error("EXPO_PUBLIC_DOMAIN is not set");
+    // Should not happen with the fallback above, but for safety:
+    host = "meter-reader-backend.onrender.com";
   }
 
   // Use http for localhost or IP addresses, otherwise https
