@@ -11,7 +11,7 @@
     "server:build": "npx esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=server_dist --alias:@shared=./shared",
     "server:prod": "cross-env NODE_ENV=production node server_dist/index.js",
     "build": "npm install && npm run server:build && npm run db:push",
-    "start": "cross-env NODE_ENV=production node server_dist/index.js",
+    "start": "npm run server:prod",
     "db:push": "npx drizzle-kit push",
     "lint": "npx expo lint",
     "lint:fix": "npx expo lint --fix",
