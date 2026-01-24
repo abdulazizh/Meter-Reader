@@ -126,7 +126,22 @@ export function registerAdminRoutes(app: Express) {
 
   app.post("/api/admin/meters", requireAdmin, async (req, res) => {
     try {
-      const meter = await storage.createMeter(req.body);
+      // Transform the request body to handle date conversion and default values
+      const meterData = { ...req.body };
+      
+      // Handle date conversion
+      if (meterData.previousReadingDate === "") {
+        meterData.previousReadingDate = new Date();
+      } else if (typeof meterData.previousReadingDate === 'string') {
+        meterData.previousReadingDate = new Date(meterData.previousReadingDate);
+      }
+      
+      // Set default address if not provided
+      if (meterData.address === undefined) {
+        meterData.address = "";
+      }
+      
+      const meter = await storage.createMeter(meterData);
       res.status(201).json(meter);
     } catch (error) {
       console.error("Error creating meter:", error);

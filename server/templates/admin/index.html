@@ -916,7 +916,7 @@
   <div class="modal" id="meter-modal">
     <div class="modal-content">
       <div class="modal-header">
-        <h3 class="modal-title" id="meter-modal-title">إضافة عداد جديد</h3>
+        <h3 class="modal-title" id="meter-modal-title">إضافة مشترك جديد</h3>
         <button class="modal-close" onclick="closeModal('meter-modal')">&times;</button>
       </div>
       <form id="meter-form" onsubmit="saveMeter(event)">
@@ -1489,7 +1489,7 @@
     }
 
     function showAddMeterModal() {
-      document.getElementById('meter-modal-title').textContent = 'إضافة عداد جديد';
+      document.getElementById('meter-modal-title').textContent = 'إضافة مشترك جديد';
       document.getElementById('meter-form').reset();
       document.getElementById('meter-id').value = '';
       document.getElementById('meter-modal').classList.add('active');
