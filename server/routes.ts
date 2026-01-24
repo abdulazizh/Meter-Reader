@@ -57,6 +57,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/meters/:readerId/check-sync", async (req, res) => {
+    try {
+      const { readerId } = req.params;
+      const meters = await storage.getMetersByReaderId(readerId);
+      const meterIds = meters.map(m => m.id);
+      res.json({ meterIds, timestamp: new Date().toISOString() });
+    } catch (error) {
+      console.error("Error checking sync for meters:", error);
+      res.status(500).json({ error: "Failed to check sync for meters" });
+    }
+  });
+
   app.get("/api/meter/:id", async (req, res) => {
     try {
       const { id } = req.params;

@@ -8,6 +8,8 @@ import {
   Pressable,
   Image,
   ActivityIndicator,
+  AppState,
+  type AppStateStatus,
 } from "react-native";
 // @ts-ignore
 import NetInfo from '@react-native-netinfo/netinfo';
@@ -237,6 +239,22 @@ export default function MetersListScreen() {
     return unsubscribe;
   }, [navigation, loadPending]);
 
+  // Refetch meters when app comes back from background
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'active') {
+        // Small delay to ensure network is ready
+        setTimeout(() => {
+          refetch();
+        }, 1000);
+      }
+    });
+
+    return () => {
+      subscription?.remove();
+    };
+  }, [refetch]);
+
   const filteredMeters = meters.filter((meter) => {
     const query = searchQuery.toLowerCase();
     return (
@@ -433,6 +451,7 @@ export default function MetersListScreen() {
               onRefresh={onRefresh}
               tintColor={AppColors.primary}
               colors={[AppColors.primary]}
+              title="اسحب للتحديث"
             />
           }
           ListEmptyComponent={<EmptyState />}

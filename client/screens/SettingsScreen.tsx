@@ -4,7 +4,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as Sharing from "expo-sharing";
-import { Paths, File } from "expo-file-system";
+import * as FileSystem from "expo-file-system";
+import { writeAsStringAsync } from "expo-file-system";
+import Constants from 'expo-constants';
+import * as XLSX from "xlsx";
 
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { ThemedText } from "@/components/ThemedText";
@@ -128,13 +131,20 @@ export default function SettingsScreen() {
       const data = await response.json();
 
       const fileName = `meter_readings_${new Date().toISOString().split('T')[0]}.json`;
-      const exportFile = new File(Paths.cache, fileName);
-
-      await exportFile.write(JSON.stringify(data, null, 2));
+      
+      // Access document directory dynamically
+      const docDir = (FileSystem as any).documentDirectory;
+      if (!docDir) {
+        throw new Error("Could not access document directory");
+      }
+      
+      const filePath = `${docDir}${fileName}`;
+      
+      await writeAsStringAsync(filePath, JSON.stringify(data, null, 2));
 
       const canShare = await Sharing.isAvailableAsync();
       if (canShare) {
-        await Sharing.shareAsync(exportFile.uri, {
+        await Sharing.shareAsync(filePath, {
           mimeType: "application/json",
           dialogTitle: "تصدير القراءات",
         });
@@ -146,6 +156,111 @@ export default function SettingsScreen() {
       console.error("Error exporting:", error);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert("خطأ", "حدث خطأ أثناء تصدير البيانات");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleExcelExport = async () => {
+    if (!readerId) {
+      Alert.alert("خطأ", "لم يتم تحميل بيانات القارئ");
+      return;
+    }
+
+    setIsExporting(true);
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    try {
+      const url = new URL(`/api/export/${readerId}`, getApiUrl());
+      const response = await fetch(url.toString());
+      const data = await response.json();
+
+      // Prepare Excel data
+      const workbook = XLSX.utils.book_new();
+      
+      // Create meters sheet
+      if (data.meters && Array.isArray(data.meters)) {
+        const metersData = data.meters.map((meter: any) => ({
+          'رقم الحساب': meter.accountNumber,
+          'تسلسل': meter.sequence,
+          'رقم المقياس': meter.meterNumber,
+          'الصنف': meter.category,
+          'اسم المشترك': meter.subscriberName,
+          'العنوان': `${meter.address.record || ''} ${meter.address.block || ''} ${meter.address.property || ''}`,
+          'القراءة_previous': meter.previousReading,
+          'تاريخ القراءة_previous': meter.previousReadingDate ? new Date(meter.previousReadingDate).toLocaleDateString('ar-IQ') : '',
+          'المبلغ الحالي': meter.amounts?.currentAmount || 0,
+          'الديون': meter.amounts?.debts || 0,
+          'المجموع': meter.amounts?.totalAmount || 0,
+          'القراءات المكتملة': meter.readings?.length || 0,
+        }));
+        
+        const metersSheet = XLSX.utils.json_to_sheet(metersData);
+        XLSX.utils.book_append_sheet(workbook, metersSheet, 'المشتركين');
+      }
+      
+      // Create readings sheet if readings exist
+      if (data.meters && Array.isArray(data.meters)) {
+        const allReadings: any[] = [];
+        data.meters.forEach((meter: any) => {
+          if (meter.readings && Array.isArray(meter.readings)) {
+            meter.readings.forEach((reading: any) => {
+              allReadings.push({
+                'رقم الحساب': meter.accountNumber,
+                'اسم المشترك': meter.subscriberName,
+                'الصنف': meter.category,
+                'العنوان': `${meter.address.record || ''} ${meter.address.block || ''} ${meter.address.property || ''}`,
+                'القراءة الجديدة': reading.newReading,
+                'الفرق': reading.newReading !== null ? (reading.newReading - (meter.previousReading || 0)) : '',
+                'سبب التخطي': reading.skipReason || '',
+                'تاريخ القراءة': reading.createdAt ? new Date(reading.createdAt).toLocaleDateString('ar-IQ') + ' ' + new Date(reading.createdAt).toLocaleTimeString('ar-IQ') : '',
+                'خط العرض': reading.latitude || '',
+                'خط الطول': reading.longitude || '',
+                'الملاحظات': reading.notes || '',
+              });
+            });
+          }
+        });
+        
+        if (allReadings.length > 0) {
+          const readingsSheet = XLSX.utils.json_to_sheet(allReadings);
+          XLSX.utils.book_append_sheet(workbook, readingsSheet, 'القراءات');
+        }
+      }
+      
+      // Generate Excel file
+      const excelBuffer = XLSX.write(workbook, { type: 'array', bookType: 'xlsx' });
+      
+      // Save to file
+      const fileName = `meter_readings_${new Date().toISOString().split('T')[0]}.xlsx`;
+      
+      // Write the file to cache directory
+      
+      // Access document directory dynamically
+      const docDir = (FileSystem as any).documentDirectory;
+      if (!docDir) {
+        throw new Error("Could not access document directory");
+      }
+      
+      const fileUri = `${docDir}${fileName}`;
+      await FileSystem.writeAsStringAsync(fileUri, String.fromCharCode(...excelBuffer), {
+        encoding: 'base64',
+      });
+      
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(fileUri, {
+          mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          dialogTitle: "تصدير القراءات بصيغة Excel",
+        });
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else {
+        Alert.alert("تم التصدير", `تم حفظ ملف Excel: ${fileName}`);
+      }
+    } catch (error) {
+      console.error("Error exporting to Excel:", error);
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert("خطأ", "حدث خطأ أثناء تصدير البيانات إلى Excel");
     } finally {
       setIsExporting(false);
     }
@@ -236,6 +351,13 @@ export default function SettingsScreen() {
             title={isExporting ? "جاري التصدير..." : "تصدير القراءات"}
             subtitle="تصدير جميع القراءات والصور"
             onPress={handleExport}
+          />
+          <View style={[styles.divider, { backgroundColor: theme.border }]} />
+          <SettingsItem
+            icon="file-text"
+            title={isExporting ? "جاري التصدير..." : "تصدير إلى Excel"}
+            subtitle="تصدير القراءات بصيغة Excel"
+            onPress={handleExcelExport}
           />
           <View style={[styles.divider, { backgroundColor: theme.border }]} />
           <SettingsItem

@@ -185,6 +185,8 @@ export function registerAdminRoutes(app: Express) {
     try {
       const { id } = req.params;
       await storage.deleteMeter(id);
+      // In a real-world scenario, you would broadcast this change to connected clients
+      // For now, we'll just send success response
       res.json({ success: true });
     } catch (error) {
       console.error("Error deleting meter:", error);
@@ -336,6 +338,17 @@ export function registerAdminRoutes(app: Express) {
         }
       } else if (type === "meters") {
         for (const item of data) {
+          // Validate required fields
+          if (!item.accountNumber) {
+            return res.status(400).json({ error: `Missing required field 'accountNumber' for meter at index ${count}` });
+          }
+          if (!item.subscriberName) {
+            return res.status(400).json({ error: `Missing required field 'subscriberName' for meter at index ${count}` });
+          }
+          if (!item.meterNumber) {
+            return res.status(400).json({ error: `Missing required field 'meterNumber' for meter at index ${count}` });
+          }
+          
           await storage.createMeter({
             accountNumber: item.accountNumber,
             sequence: item.sequence || "001",
@@ -406,12 +419,28 @@ export function registerAdminRoutes(app: Express) {
         }
       } else if (type === "meters") {
         for (const item of jsonData) {
+          // Extract values with fallbacks
+          const accountNumber = item['رقم الحساب'] || item['accountNumber'];
+          const subscriberName = item['اسم المشترك'] || item['subscriberName'];
+          const meterNumber = item['رقم المقياس'] || item['meterNumber'];
+          
+          // Validate required fields
+          if (!accountNumber) {
+            return res.status(400).json({ error: `Missing required field 'accountNumber' for meter at index ${count}` });
+          }
+          if (!subscriberName) {
+            return res.status(400).json({ error: `Missing required field 'subscriberName' for meter at index ${count}` });
+          }
+          if (!meterNumber) {
+            return res.status(400).json({ error: `Missing required field 'meterNumber' for meter at index ${count}` });
+          }
+          
           await storage.createMeter({
-            accountNumber: item['رقم الحساب'] || item['accountNumber'],
+            accountNumber: accountNumber,
             sequence: item['تسلسل'] || item['sequence'] || "001",
-            meterNumber: item['رقم المقياس'] || item['meterNumber'],
+            meterNumber: meterNumber,
             category: item['الصنف'] || item['category'] || "سكني",
-            subscriberName: item['اسم المشترك'] || item['subscriberName'],
+            subscriberName: subscriberName,
             address: item['العنوان'] || item['address'] || "",
             record: item['السجل'] || item['record'] || "1",
             block: item['البلوك'] || item['block'] || "1",

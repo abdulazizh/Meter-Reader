@@ -382,6 +382,11 @@ export default function ReadingEntryScreen() {
       return;
     }
 
+    // Save photo to device gallery
+    if (photoUri) {
+      await savePhotoToGallery(photoUri, photoFileName);
+    }
+    
     setIsSaving(false);
 
     const apiSuccess = await mutation.mutateAsync({
@@ -408,6 +413,9 @@ export default function ReadingEntryScreen() {
       Alert.alert("تم الحفظ محلياً", "تم رفع الصورة ولكن فشل تحديث السيرفر. تم حفظ البيانات محلياً للمزامنة لاحقاً.", [
         { text: "حسناً", onPress: () => goToNextMeter() }
       ]);
+    } else {
+      // Successfully saved to server, invalidate the query to refresh the meters list
+      queryClient.invalidateQueries({ queryKey: ["/api/meters"] });
     }
   };
 
