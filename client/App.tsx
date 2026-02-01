@@ -21,6 +21,7 @@ import LoginScreen from "@/screens/LoginScreen";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { AppColors } from "@/constants/theme";
+import { initLocalDB } from "@/lib/local-db";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -55,6 +56,10 @@ export default function App() {
     Cairo_600SemiBold,
     Cairo_700Bold,
   });
+
+  useEffect(() => {
+    initLocalDB();
+  }, []);
 
   useEffect(() => {
     if (fontsLoaded || fontError) {

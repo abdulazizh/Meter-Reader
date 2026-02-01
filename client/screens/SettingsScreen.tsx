@@ -231,19 +231,25 @@ export default function SettingsScreen() {
       // Generate Excel file
       const excelBuffer = XLSX.write(workbook, { type: 'array', bookType: 'xlsx' });
       
+      // Convert to base64 string properly
+      const uint8Array = new Uint8Array(excelBuffer);
+      let binaryString = '';
+      for (let i = 0; i < uint8Array.length; i++) {
+        binaryString += String.fromCharCode(uint8Array[i]);
+      }
+      const base64String = btoa(binaryString);
+      
       // Save to file
       const fileName = `meter_readings_${new Date().toISOString().split('T')[0]}.xlsx`;
       
-      // Write the file to cache directory
-      
-      // Access document directory dynamically
+      // Access document directory using legacy API
       const docDir = (FileSystem as any).documentDirectory;
       if (!docDir) {
         throw new Error("Could not access document directory");
       }
       
       const fileUri = `${docDir}${fileName}`;
-      await FileSystem.writeAsStringAsync(fileUri, String.fromCharCode(...excelBuffer), {
+      await (FileSystem as any).writeAsStringAsync(fileUri, base64String, {
         encoding: 'base64',
       });
       

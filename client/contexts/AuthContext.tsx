@@ -5,6 +5,7 @@ interface Reader {
   id: string;
   username: string;
   displayName: string;
+  assignmentVersion: number;
 }
 
 interface AuthContextType {

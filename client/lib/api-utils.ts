@@ -1,21 +1,19 @@
 import * as FileSystem from "expo-file-system";
-import { Platform } from "react-native";
 import { getApiUrl } from "./query-client";
 
+// Enable photo upload to server
 export const uploadPhotoToServer = async (uri: string, fileName: string): Promise<string | null> => {
+  if (!uri) return null;
+  
   try {
-    if (Platform.OS === "web") {
-      return fileName;
-    }
-
     const base64 = await FileSystem.readAsStringAsync(uri, {
       encoding: "base64",
     });
 
-    const response = await fetch(new URL("/api/upload-photo", getApiUrl()).toString(), {
-      method: "POST",
+    const response = await fetch(`${getApiUrl()}/api/upload-photo`, {
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
       },
       body: JSON.stringify({
         photoBase64: base64,
@@ -24,14 +22,13 @@ export const uploadPhotoToServer = async (uri: string, fileName: string): Promis
     });
 
     if (!response.ok) {
-      throw new Error("Upload failed");
+      throw new Error('Upload failed');
     }
 
-    const result = await response.json();
-    console.log("Photo uploaded to server:", result.photoPath);
-    return result.photoPath;
+    const data = await response.json();
+    return data.photoPath || fileName;
   } catch (error) {
-    console.error("Error uploading photo:", error);
+    console.error('Error uploading photo:', error);
     return null;
   }
 };

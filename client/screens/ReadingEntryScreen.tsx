@@ -36,7 +36,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius, AppColors, Shadows, Typography } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { apiRequest, getApiUrl } from "@/lib/query-client";
-import { savePendingReading } from "@/lib/offline-storage";
+import { saveReadingToLocalDB } from "@/lib/local-db";
 import { uploadPhotoToServer } from "@/lib/api-utils";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
@@ -202,27 +202,54 @@ export default function ReadingEntryScreen() {
       console.log("Could not get location:", error);
     }
 
-    const success = await skipMutation.mutateAsync({ skipReason: reasonLabel, latitude, longitude }).catch(() => null);
-    
-    if (!success) {
-      const savedLocally = await savePendingReading({
-        meterId: meter.id,
-        readerId: meter.readerId,
-        newReading: null,
-        photoUri: "",
-        photoFileName: "",
-        skipReason: reasonLabel,
-        latitude,
-        longitude,
+    const readingId = Math.random().toString(36).substring(7);
+    const savedLocally = await saveReadingToLocalDB(
+      readingId,
+      meter.id,
+      meter.readerId,
+      null,
+      "",
+      "",
+      undefined,
+      reasonLabel,
+      latitude,
+      longitude
+    );
+
+    if (savedLocally) {
+      // Optimistic update
+      queryClient.setQueryData(['/api/meters', meter.readerId], (oldData: any) => {
+        if (oldData && Array.isArray(oldData)) {
+          return oldData.map((m: any) => 
+            m.id === meter.id 
+              ? { 
+                  ...m, 
+                  latestReading: {
+                    id: readingId,
+                    newReading: null,
+                    createdAt: new Date().toISOString(),
+                    readingDate: new Date().toISOString(),
+                    meterId: meter.id,
+                    readerId: meter.readerId,
+                    photoPath: null,
+                    notes: null,
+                    skipReason: reasonLabel,
+                    isCompleted: true,
+                    latitude: latitude?.toString() || null,
+                    longitude: longitude?.toString() || null
+                  }
+                }
+              : m
+          );
+        }
+        return oldData;
       });
 
-      if (savedLocally) {
-        Alert.alert("تم الحفظ محلياً", "لا يوجد اتصال بالإنترنت. تم حفظ القراءة محلياً وسيتم مزامنتها لاحقاً.", [
-          { text: "حسناً", onPress: () => goToNextMeter() }
-        ]);
-      } else {
-        Alert.alert("خطأ", "فشل الحفظ محلياً أيضاً.");
-      }
+      Alert.alert("تم الحفظ محلياً", "تم حفظ سبب التخطي محلياً وسيتم مزامنته لاحقاً عند الضغط على زر المزامنة.", [
+        { text: "حسناً", onPress: () => goToNextMeter() }
+      ]);
+    } else {
+      Alert.alert("خطأ", "فشل الحفظ محلياً.");
     }
   };
 
@@ -290,6 +317,7 @@ export default function ReadingEntryScreen() {
         }
       }
 
+      // حفظ الصورة في معرض الجهاز
       const asset = await MediaLibrary.createAssetAsync(uri);
       
       const albumName = "قراءات الكهرباء";
@@ -301,7 +329,7 @@ export default function ReadingEntryScreen() {
         await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
       }
       
-      console.log("Photo saved to gallery:", fileName);
+      console.log(`Photo saved to album '${albumName}'. Reference name: ${fileName}`);
       return true;
     } catch (error) {
       console.error("Error saving photo to gallery:", error);
@@ -339,7 +367,12 @@ export default function ReadingEntryScreen() {
     setIsSaving(true);
 
     const timestamp = Date.now();
-    const photoFileName = `${meter.accountNumber}_${meter.sequence}_${timestamp}.jpg`;
+    // Ensure filename is safe and properly formatted
+    const safeAccountNumber = meter.accountNumber.replace(/[^a-zA-Z0-9]/g, '_');
+    const safeSequence = meter.sequence.replace(/[^a-zA-Z0-9]/g, '_');
+    const photoFileName = `${safeAccountNumber}_${safeSequence}_${timestamp}.jpg`;
+    
+    console.log('Generated photo filename:', photoFileName);
 
     let latitude: number | undefined;
     let longitude: number | undefined;
@@ -357,66 +390,69 @@ export default function ReadingEntryScreen() {
       console.log("Could not get location:", error);
     }
 
-    const uploadedPath = await uploadPhotoToServer(photoUri, photoFileName);
-
-    if (!uploadedPath) {
-      const savedLocally = await savePendingReading({
-        meterId: meter.id,
-        readerId: meter.readerId,
-        newReading: readingValue,
-        photoUri: photoUri,
-        photoFileName: photoFileName,
-        notes: notes.trim() || undefined,
-        latitude,
-        longitude,
-      });
-
-      setIsSaving(false);
-      if (savedLocally) {
-        Alert.alert("تم الحفظ محلياً", "لا يوجد اتصال بالإنترنت. تم حفظ القراءة والصورة محلياً وسيتم مزامنتها لاحقاً.", [
-          { text: "حسناً", onPress: () => goToNextMeter() }
-        ]);
-      } else {
-        Alert.alert("تنبيه", "فشل رفع الصورة وفشل الحفظ محلياً.");
-      }
-      return;
-    }
-
-    // Save photo to device gallery
+    // حفظ الصورة في معرض الجهاز فقط - بدون رفع للخادم
     if (photoUri) {
       await savePhotoToGallery(photoUri, photoFileName);
     }
     
-    setIsSaving(false);
-
-    const apiSuccess = await mutation.mutateAsync({
-      newReading: readingValue,
-      photoPath: uploadedPath,
-      notes: notes.trim() || undefined,
+    // حفظ القراءة محلياً في SQLite (strictly offline per user request)
+    const readingId = Math.random().toString(36).substring(7);
+    const savedLocally = await saveReadingToLocalDB(
+      readingId,
+      meter.id,
+      meter.readerId,
+      readingValue,
+      photoUri || "",
+      photoFileName,
+      notes.trim() || undefined,
+      undefined,
       latitude,
-      longitude,
-    }).catch(() => null);
+      longitude
+    );
 
-    if (!apiSuccess) {
-       await savePendingReading({
-        meterId: meter.id,
-        readerId: meter.readerId,
-        newReading: readingValue,
-        photoUri: photoUri,
-        photoFileName: photoFileName,
-        photoPath: uploadedPath,
-        notes: notes.trim() || undefined,
-        latitude,
-        longitude,
-      });
-      
-      Alert.alert("تم الحفظ محلياً", "تم رفع الصورة ولكن فشل تحديث السيرفر. تم حفظ البيانات محلياً للمزامنة لاحقاً.", [
-        { text: "حسناً", onPress: () => goToNextMeter() }
-      ]);
-    } else {
-      // Successfully saved to server, invalidate the query to refresh the meters list
-      queryClient.invalidateQueries({ queryKey: ["/api/meters"] });
+    if (!savedLocally) {
+      setIsSaving(false);
+      Alert.alert("خطأ", "فشل الحفظ المحلي في قاعدة البيانات.");
+      return;
     }
+
+    setIsSaving(false);
+    
+    // تحديث حالة المتر محلياً ليعكس أنه تم قراءته
+    queryClient.setQueryData(['/api/meters', meter.readerId], (oldData: any) => {
+      if (oldData && Array.isArray(oldData)) {
+        return oldData.map((m: any) => 
+          m.id === meter.id 
+            ? { 
+                ...m, 
+                latestReading: {
+                  id: readingId,
+                  newReading: readingValue,
+                  createdAt: new Date().toISOString(),
+                  readingDate: new Date().toISOString(),
+                  meterId: meter.id,
+                  readerId: meter.readerId,
+                  photoPath: photoFileName,
+                  notes: notes.trim() || null,
+                  skipReason: null,
+                  isCompleted: true,
+                  latitude: latitude?.toString() || null,
+                  longitude: longitude?.toString() || null
+                }
+              }
+            : m
+        );
+      }
+      return oldData;
+    });
+    
+    // منع إعادة التحميل التلقائي للحفاظ على الحالة المحلية
+    queryClient.cancelQueries({ queryKey: ['/api/meters', meter.readerId] });
+    
+    // إظهار رسالة تؤكد الحفظ المحلي والانتظار للمزامنة اليدوية
+    Alert.alert("تم الحفظ محلياً", "تم حفظ القراءة والصورة محلياً بنجاح.\nيرجى المزامنة يدوياً من قائمة المشتركين عند توفر الإنترنت.", [
+      { text: "حسناً", onPress: () => goToNextMeter() }
+    ]);
   };
 
   const canSave = newReading.trim().length > 0 && photoUri !== null;
@@ -428,26 +464,26 @@ export default function ReadingEntryScreen() {
           ref={(ref) => setCameraRef(ref)}
           style={styles.camera}
           facing="back"
-        >
-          <View style={styles.cameraOverlay}>
-            <View style={styles.cameraHeader}>
-              <Pressable
-                onPress={() => setShowCamera(false)}
-                style={styles.cameraCloseButton}
-              >
-                <Feather name="x" size={28} color="#FFFFFF" />
-              </Pressable>
-            </View>
-            <View style={styles.cameraFooter}>
-              <Pressable
-                onPress={handleCapture}
-                style={styles.captureButton}
-              >
-                <View style={styles.captureButtonInner} />
-              </Pressable>
-            </View>
+        />
+        {/* Overlay content positioned absolutely */}
+        <View style={styles.cameraOverlay} pointerEvents="box-none">
+          <View style={styles.cameraHeader}>
+            <Pressable
+              onPress={() => setShowCamera(false)}
+              style={styles.cameraCloseButton}
+            >
+              <Feather name="x" size={28} color="#FFFFFF" />
+            </Pressable>
           </View>
-        </CameraView>
+          <View style={styles.cameraFooter}>
+            <Pressable
+              onPress={handleCapture}
+              style={styles.captureButton}
+            >
+              <View style={styles.captureButtonInner} />
+            </Pressable>
+          </View>
+        </View>
       </View>
     );
   }
@@ -655,7 +691,7 @@ export default function ReadingEntryScreen() {
               <View style={styles.savingIndicator}>
                 <ActivityIndicator color="#FFFFFF" />
                 <ThemedText style={styles.saveButtonText}>
-                  {isSaving ? "جاري رفع الصورة..." : "جاري الحفظ..."}
+                  {isSaving ? "جاري الحفظ..." : "حفظ القراءة"}
                 </ThemedText>
               </View>
             ) : (
@@ -1126,8 +1162,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   cameraOverlay: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     justifyContent: "space-between",
+    pointerEvents: "none",
   },
   cameraHeader: {
     flexDirection: "row",

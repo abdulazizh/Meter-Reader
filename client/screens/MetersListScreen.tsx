@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from "react";
+import React, { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import {
   View,
   FlatList,
@@ -35,6 +35,10 @@ import { getPendingReadings, removePendingReading, PendingReading } from "@/lib/
 import { uploadPhotoToServer } from "@/lib/api-utils";
 import type { MeterWithReading } from "@shared/schema";
 import { Alert } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { clearLocalDB, saveMeterToLocalDB, getMetersFromLocalDB, getPendingReadingsFromDB, markReadingAsSynced } from "@/lib/local-db";
+
+const LOCAL_ASSIGNMENT_VERSION_KEY = "@assignment_version";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -201,34 +205,97 @@ export default function MetersListScreen() {
   const [isSyncing, setIsSyncing] = useState(false);
 
   const readerId = reader?.id || null;
+  const [localMeters, setLocalMeters] = useState<MeterWithReading[]>([]);
 
-  const { data: meters = [], isLoading, refetch } = useQuery<MeterWithReading[]>({
+  const { data: apiMeters, isLoading: isApiLoading, refetch } = useQuery<MeterWithReading[]>({
     queryKey: ["/api/meters", readerId],
     enabled: !!readerId,
   });
 
+  // Load from local DB on mount or when readerId changes
+  const loadFromLocalDB = useCallback(() => {
+    if (readerId) {
+      const storedMeters = getMetersFromLocalDB(readerId);
+      setLocalMeters(storedMeters);
+    }
+  }, [readerId]);
+
+  useEffect(() => {
+    loadFromLocalDB();
+  }, [loadFromLocalDB]);
+
+  const meters = (apiMeters && apiMeters.length > 0) ? apiMeters : localMeters;
+  const isLoading = isApiLoading && localMeters.length === 0;
+
   const loadPending = useCallback(async () => {
-    const pending = await getPendingReadings();
+    const pending = getPendingReadingsFromDB();
     setPendingReadings(pending);
   }, []);
+
+  // Check for assignment version changes and clear local DB if needed
+  useEffect(() => {
+    const checkAssignmentVersion = async () => {
+      if (!reader) return;
+      
+      try {
+        const storedVersion = await AsyncStorage.getItem(LOCAL_ASSIGNMENT_VERSION_KEY);
+        const currentVersion = reader.assignmentVersion || 0;
+        
+        if (storedVersion === null) {
+          // First time, just save version
+          await AsyncStorage.setItem(LOCAL_ASSIGNMENT_VERSION_KEY, currentVersion.toString());
+        } else if (parseInt(storedVersion) < currentVersion) {
+          console.log(`Assignment version changed: ${storedVersion} -> ${currentVersion}. Clearing local DB.`);
+          const cleared = await clearLocalDB();
+          if (cleared) {
+            await AsyncStorage.setItem(LOCAL_ASSIGNMENT_VERSION_KEY, currentVersion.toString());
+            // Refetch meters after clearing
+            refetch();
+          }
+        }
+      } catch (error) {
+        console.error("Error checking assignment version:", error);
+      }
+    };
+    
+    checkAssignmentVersion();
+  }, [reader, refetch]);
+
+  // Sync fetched meters to local SQLite database
+  useEffect(() => {
+    if (apiMeters && apiMeters.length > 0) {
+      apiMeters.forEach(meter => {
+        saveMeterToLocalDB(meter);
+      });
+      // Optionally reload from local DB to ensure UI is in sync with DB state
+      // loadFromLocalDB(); 
+    }
+  }, [apiMeters]);
+
+  // إعادة تحميل البيانات عند العودة للشاشة لعكس التحديثات المحلية
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      refetch();
+      loadPending();
+    });
+    return unsubscribe;
+  }, [navigation, refetch, loadPending]);
 
   useEffect(() => {
     loadPending();
   }, [loadPending]);
 
-  // Monitor network connectivity and sync when connection is restored
+  // Monitor network connectivity but disable automatic sync to respect manual sync policy
+  // Manual sync only when user presses the sync button
   useEffect(() => {
     const unsubscribe = NetInfo.addEventListener((state: any) => {
-      if (state.isConnected && !isSyncing && pendingReadings.length > 0) {
-        // Add a small delay to ensure connection is stable
-        setTimeout(() => {
-          handleSync();
-        }, 1000);
-      }
+      // Do nothing on connection changes - sync only happens manually
+      // This prevents automatic retries that were causing continuous sync attempts
+      console.log('Network state changed:', state.isConnected ? 'Connected' : 'Disconnected');
     });
 
     return () => unsubscribe();
-  }, [isSyncing, pendingReadings]);
+  }, []);
 
   // Reload pending readings when screen comes into focus
   useEffect(() => {
@@ -283,7 +350,7 @@ export default function MetersListScreen() {
     });
   };
 
-  const handleSync = async () => {
+  const handleSync = async (showAlert = true) => {
     if (isSyncing || pendingReadings.length === 0) return;
 
     setIsSyncing(true);
@@ -291,19 +358,18 @@ export default function MetersListScreen() {
 
     let successCount = 0;
     let failCount = 0;
+    const readingsToProcess = [...pendingReadings]; // Create a copy to avoid processing issues
 
-    for (const reading of pendingReadings) {
+    for (const reading of readingsToProcess) {
       try {
-        let photoPath = reading.photoPath;
-        
-        // If it's a skip, we don't have a photoPath or photoUri
-        if (!photoPath && reading.photoUri) {
-          photoPath = (await uploadPhotoToServer(reading.photoUri, reading.photoFileName)) || undefined;
-        }
-
-        if (reading.photoUri && !photoPath) {
-          failCount++;
-          continue;
+        // رفع الصورة أولاً إذا كانت موجودة
+        let photoPath = reading.photoFileName;
+        if (reading.photoUri && reading.photoFileName) {
+          console.log(`Uploading photo for reading ${reading.id}...`);
+          const uploadedPath = await uploadPhotoToServer(reading.photoUri, reading.photoFileName);
+          if (uploadedPath) {
+            photoPath = uploadedPath;
+          }
         }
 
         const res = await apiRequest("POST", "/api/readings", {
@@ -318,9 +384,16 @@ export default function MetersListScreen() {
         });
 
         if (res.ok) {
-          await removePendingReading(reading.id);
+          markReadingAsSynced(reading.id);
           successCount++;
+          console.log(`Successfully synced reading ${reading.id}`);
+          // Force refresh meters to update the UI and mark meter as completed
+          setTimeout(() => {
+            refetch();
+          }, 1000);
         } else {
+          const errorText = await res.text();
+          console.log(`Failed to sync reading ${reading.id}:`, errorText);
           failCount++;
         }
       } catch (error) {
@@ -337,10 +410,12 @@ export default function MetersListScreen() {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
 
-    if (failCount === 0) {
+    // Only show alert if user manually triggered sync
+    if (failCount === 0 && successCount > 0) {
       Alert.alert("تمت المزامنة", `تمت مزامنة ${successCount} قراءة بنجاح.`);
-    } else {
-      Alert.alert("تنبيه المزامنة", `تمت مزامنة ${successCount} قراءة، وفشل ${failCount}. تأكد من اتصال الإنترنت وحاول مرة أخرى.`);
+    } else if (failCount > 0) {
+      // Don't show alert for automatic sync attempts to avoid spam
+      console.log(`Automatic sync: ${successCount} succeeded, ${failCount} failed`);
     }
   };
 
@@ -410,7 +485,7 @@ export default function MetersListScreen() {
 
         {pendingReadings.length > 0 && (
           <Pressable
-            onPress={handleSync}
+            onPress={() => handleSync(true)}
             disabled={isSyncing}
             style={[
               styles.syncNotification,
@@ -425,7 +500,7 @@ export default function MetersListScreen() {
             </View>
             {!isSyncing && (
               <View style={styles.syncBadge}>
-                <ThemedText style={styles.syncBadgeText}>مزامنة الآن</ThemedText>
+                <ThemedText style={styles.syncBadgeText}>مزامنة يدوية</ThemedText>
               </View>
             )}
           </Pressable>

@@ -11,6 +11,7 @@ export const readers = pgTable("readers", {
   password: text("password").notNull(),
   displayName: text("display_name").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  assignmentVersion: integer("assignment_version").default(0).notNull(),
 });
 
 export const readersRelations = relations(readers, ({ many }) => ({

@@ -1,3 +1,4 @@
+
 import { Text, type TextProps } from "react-native";
 import { useTheme } from "@/hooks/useTheme";
 import { Typography } from "@/constants/theme";
@@ -57,6 +58,10 @@ export function ThemedText({
   };
 
   return (
-    <Text style={[{ color: getColor() }, getTypeStyle(), style]} {...rest} />
+    <Text 
+      testID="themed-text"
+      style={[{ color: getColor() }, getTypeStyle(), style]} 
+      {...rest} 
+    />
   );
 }

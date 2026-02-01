@@ -1034,7 +1034,9 @@
     async function loadReaders() {
       document.getElementById('readers-loading').classList.add('show');
       try {
-        const response = await fetch('/api/admin/readers');
+        const response = await fetch('/api/admin/readers', {
+          credentials: 'include'
+        });
         readers = await response.json();
         renderReaders();
         updateReaderSelects();
@@ -1047,7 +1049,9 @@
     async function loadMeters() {
       document.getElementById('meters-loading').classList.add('show');
       try {
-        const response = await fetch('/api/admin/meters');
+        const response = await fetch('/api/admin/meters', {
+          credentials: 'include'
+        });
         meters = await response.json();
       } catch (error) {
         showError('فشل تحميل المشتركين');
@@ -1058,7 +1062,9 @@
     async function loadReadings() {
       document.getElementById('readings-loading').classList.add('show');
       try {
-        const response = await fetch('/api/admin/readings');
+        const response = await fetch('/api/admin/readings', {
+          credentials: 'include'
+        });
         allReadings = await response.json();
         renderReadings();
       } catch (error) {
@@ -1399,6 +1405,7 @@
         const response = await fetch('/api/admin/meters/bulk-assign', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify({
             readerId,
             filterType: type,
@@ -1465,6 +1472,7 @@
         const response = await fetch(url, {
           method,
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify(data)
         });
         if (!response.ok) throw new Error();
@@ -1479,7 +1487,10 @@
     async function deleteReader(id) {
       if (!confirm('هل أنت متأكد من حذف هذا القارئ؟')) return;
       try {
-        const response = await fetch(`/api/admin/readers/${id}`, { method: 'DELETE' });
+        const response = await fetch(`/api/admin/readers/${id}`, { 
+          method: 'DELETE',
+          credentials: 'include'
+        });
         if (!response.ok) throw new Error();
         showSuccess('تم حذف القارئ');
         loadReaders();
@@ -1546,6 +1557,7 @@
         const response = await fetch(url, {
           method,
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify(data)
         });
         if (!response.ok) throw new Error();
@@ -1560,7 +1572,10 @@
     async function deleteMeter(id) {
       if (!confirm('هل أنت متأكد من حذف هذا العداد؟')) return;
       try {
-        const response = await fetch(`/api/admin/meters/${id}`, { method: 'DELETE' });
+        const response = await fetch(`/api/admin/meters/${id}`, { 
+          method: 'DELETE',
+          credentials: 'include'
+        });
         if (!response.ok) throw new Error();
         showSuccess('تم حذف العداد');
         loadMeters();
@@ -1574,7 +1589,10 @@
       if (!confirm('تأكيد نهائي: اضغط موافق لحذف جميع البيانات')) return;
       
       try {
-        const response = await fetch('/api/admin/meters-all', { method: 'DELETE' });
+        const response = await fetch('/api/admin/meters-all', { 
+          method: 'DELETE',
+          credentials: 'include'
+        });
         if (!response.ok) throw new Error();
         showSuccess('تم حذف جميع المشتركين بنجاح');
         await loadData();
@@ -1609,6 +1627,7 @@
         const response = await fetch(`/api/admin/readings/${id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify({
             newReading: newReading ? parseInt(newReading) : null,
             skipReason: skipReason || null,
@@ -1627,7 +1646,10 @@
     async function deleteReading(id) {
       if (!confirm('هل أنت متأكد من حذف هذه القراءة؟')) return;
       try {
-        const response = await fetch(`/api/admin/readings/${id}`, { method: 'DELETE' });
+        const response = await fetch(`/api/admin/readings/${id}`, { 
+          method: 'DELETE',
+          credentials: 'include'
+        });
         if (!response.ok) throw new Error();
         showSuccess('تم حذف القراءة');
         loadReadings();
@@ -1665,7 +1687,9 @@
       document.getElementById('readings-loading').style.display = 'block';
       
       try {
-        const response = await fetch(`/api/admin/readings?year=${year}&month=${month}`);
+        const response = await fetch(`/api/admin/readings?year=${year}&month=${month}`, {
+          credentials: 'include'
+        });
         allReadings = await response.json();
         renderReadings();
       } catch (error) {
@@ -1781,7 +1805,9 @@
     
     async function downloadTemplate(type) {
       try {
-        const response = await fetch(`/api/admin/template/${type}`);
+        const response = await fetch(`/api/admin/template/${type}`, {
+          credentials: 'include'
+        });
         
         if (!response.ok) {
           throw new Error('Failed to download template');
@@ -1856,6 +1882,7 @@
           const response = await fetch(`/api/admin/import/${type}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
             body: JSON.stringify(importData)
           });
           if (!response.ok) throw new Error();
@@ -1893,7 +1920,9 @@
         let url = `/api/admin/export/${type}?format=${format}`;
         if (readerId) url += `&readerId=${readerId}`;
         
-        const response = await fetch(url);
+        const response = await fetch(url, {
+          credentials: 'include'
+        });
         const data = await response.json();
         
         let content, filename, mimeType;
@@ -1956,7 +1985,10 @@
       if (!confirm('هل أنت متأكد من تسجيل الخروج؟')) return;
       
       try {
-        const response = await fetch('/api/admin/logout', { method: 'POST' });
+        const response = await fetch('/api/admin/logout', { 
+          method: 'POST',
+          credentials: 'include'
+        });
         if (response.ok) {
           window.location.href = '/admin/login';
         } else {

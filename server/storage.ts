@@ -27,6 +27,7 @@ export interface IStorage {
   getLatestReadingByMeterId(meterId: string): Promise<Reading | undefined>;
   createReading(reading: InsertReading): Promise<Reading>;
   updateMeterAfterReading(meterId: string, newReading: number): Promise<void>;
+  incrementReaderAssignmentVersion(readerId: string): Promise<void>;
   deleteAllMeters(): Promise<void>;
 }
 
@@ -142,6 +143,16 @@ export class DatabaseStorage implements IStorage {
       .where(eq(readers.id, id))
       .returning();
     return reader;
+  }
+
+  async incrementReaderAssignmentVersion(readerId: string): Promise<void> {
+    const [reader] = await db.select().from(readers).where(eq(readers.id, readerId));
+    if (!reader) return;
+
+    await db
+      .update(readers)
+      .set({ assignmentVersion: reader.assignmentVersion + 1 })
+      .where(eq(readers.id, readerId));
   }
 
   async deleteReader(id: string): Promise<void> {

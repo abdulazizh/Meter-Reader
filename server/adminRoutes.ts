@@ -174,6 +174,12 @@ export function registerAdminRoutes(app: Express) {
         }
       });
       const meter = await storage.updateMeter(id, updateData);
+      
+      // If readerId was changed, increment version
+      if (updateData.readerId) {
+        await storage.incrementReaderAssignmentVersion(updateData.readerId);
+      }
+      
       res.json(meter);
     } catch (error) {
       console.error("Error updating meter:", error);
@@ -254,6 +260,11 @@ export function registerAdminRoutes(app: Express) {
       }
       
       res.json({ success: true, count: updatedCount });
+
+      // Increment assignment version for the reader
+      if (updatedCount > 0) {
+        await storage.incrementReaderAssignmentVersion(readerId);
+      }
     } catch (error) {
       console.error("Error bulk assigning meters:", error);
       res.status(500).json({ error: "Failed to bulk assign meters" });
@@ -327,6 +338,7 @@ export function registerAdminRoutes(app: Express) {
       }
 
       let count = 0;
+      const readerIdsToUpdate = new Set<string>();
       if (type === "readers") {
         for (const item of data) {
           await storage.createReader({
@@ -365,8 +377,14 @@ export function registerAdminRoutes(app: Express) {
             totalAmount: item.totalAmount || "0",
             readerId: item.readerId,
           });
+          if (item.readerId) readerIdsToUpdate.add(item.readerId);
           count++;
         }
+      }
+      
+      // Increment versions for affected readers
+      for (const readerId of readerIdsToUpdate) {
+        await storage.incrementReaderAssignmentVersion(readerId);
       }
       
       res.json({ success: true, count });
@@ -408,6 +426,7 @@ export function registerAdminRoutes(app: Express) {
       
       // Process the data based on type
       let count = 0;
+      const readerIdsToUpdate = new Set<string>();
       if (type === "readers") {
         for (const item of jsonData) {
           await storage.createReader({
@@ -435,6 +454,7 @@ export function registerAdminRoutes(app: Express) {
             return res.status(400).json({ error: `Missing required field 'meterNumber' for meter at index ${count}` });
           }
           
+          const readerId = item['معرف القارئ'] || item['readerId'];
           await storage.createMeter({
             accountNumber: accountNumber,
             sequence: item['تسلسل'] || item['sequence'] || "001",
@@ -450,10 +470,16 @@ export function registerAdminRoutes(app: Express) {
             currentAmount: item['المبلغ الحالي'] || item['currentAmount'] || "0",
             debts: item['الديون'] || item['debts'] || "0",
             totalAmount: item['المجموع'] || item['totalAmount'] || "0",
-            readerId: item['معرف القارئ'] || item['readerId'],
+            readerId: readerId,
           });
+          if (readerId) readerIdsToUpdate.add(readerId);
           count++;
         }
+      }
+      
+      // Increment versions for affected readers
+      for (const readerId of readerIdsToUpdate) {
+        await storage.incrementReaderAssignmentVersion(readerId);
       }
       
       res.json({ success: true, count });
