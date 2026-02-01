@@ -38,6 +38,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           id: reader.id,
           username: reader.username,
           displayName: reader.displayName,
+          assignmentVersion: reader.assignmentVersion,
         },
       });
     } catch (error) {
@@ -325,6 +326,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         id: reader.id,
         username: reader.username,
         displayName: reader.displayName,
+        assignmentVersion: reader.assignmentVersion,
         stats: {
           totalMeters: meters.length,
           completedMeters,
@@ -355,7 +357,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const photoPath = `${fileName}`;
 
       const { data, error } = await supabase.storage
-        .from('photos')
+        .from('PHOTOS')
         .upload(photoPath, buffer, {
           contentType: 'image/jpeg',
           upsert: true
@@ -382,7 +384,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const photoPath = req.params.path;
 
       const { data, error } = await supabase.storage
-        .from('photos')
+        .from('PHOTOS')
         .download(photoPath);
 
       if (error || !data) {
