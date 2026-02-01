@@ -828,7 +828,7 @@
         </select>
       </div>
       <div class="upload-area" onclick="document.getElementById('import-file').click()">
-        <input type="file" id="import-file" accept=".json,.csv,.xlsx,.xls" onchange="handleFileSelect(event)">
+        <input type="file" id="import-file" accept=".json,.csv,.xlsx,.xls,.mdb,.accdb" onchange="handleFileSelect(event)">
         <div class="upload-icon">📁</div>
         <div class="upload-text">اضغط لاختيار ملف أو اسحب الملف هنا</div>
         <div class="upload-hint">يدعم ملفات JSON و CSV و Excel</div>
@@ -1775,6 +1775,13 @@
       const file = event.target.files[0];
       if (!file) return;
       
+      if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls') || file.name.endsWith('.mdb') || file.name.endsWith('.accdb')) {
+        // For binary files, we just set a preview and wait for confirmImport
+        importData = { binary: true, name: file.name };
+        showImportPreview();
+        return;
+      }
+
       const reader = new FileReader();
       reader.onload = function(e) {
         try {
@@ -1837,6 +1844,8 @@
       const content = document.getElementById('preview-content');
       if (!importData || importData.length === 0) {
         content.innerHTML = '<p>لا توجد بيانات للعرض</p>';
+      } else if (importData.binary) {
+        content.innerHTML = `<p>الملف جاهز للرفع: <b>${importData.name}</b></p>`;
       } else {
         content.innerHTML = `<p>سيتم رفع ${importData.length} سجل</p>`;
       }
@@ -1847,20 +1856,27 @@
       if (!importData) return;
       const type = document.getElementById('import-type').value;
       
-      // Get the selected file to check if it's an Excel file
+      // Get the selected file
       const fileInput = document.getElementById('import-file');
       const file = fileInput.files[0];
       
-      if (file && (file.name.endsWith('.xlsx') || file.name.endsWith('.xls'))) {
-        // Upload Excel file using FormData
+      if (file && (file.name.endsWith('.xlsx') || file.name.endsWith('.xls') || file.name.endsWith('.mdb') || file.name.endsWith('.accdb'))) {
+        // Upload Binary file using FormData
         const formData = new FormData();
         formData.append('file', file);
         
+        let endpoint = '';
+        if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+          endpoint = `/api/admin/import-excel/${type}`;
+        } else {
+          endpoint = `/api/admin/import-access/${type}`;
+        }
+        
         try {
-          const response = await fetch(`/api/admin/import-excel/${type}`, {
+          const response = await fetch(endpoint, {
             method: 'POST',
             body: formData,
-            // Don't set Content-Type header, let browser set it with boundary
+            credentials: 'include'
           });
           
           if (!response.ok) {
@@ -1872,12 +1888,13 @@
           showSuccess(`تم رفع ${result.count} سجل بنجاح`);
           document.getElementById('import-preview').style.display = 'none';
           importData = null;
+          fileInput.value = ''; // Reset file input
           loadData();
         } catch (error) {
-          showError('فشل رفع ملف Excel: ' + error.message);
+          showError('فشل رفع الملف: ' + error.message);
         }
       } else {
-        // Handle JSON/CSV data as before
+        // Handle JSON/CSV data
         try {
           const response = await fetch(`/api/admin/import/${type}`, {
             method: 'POST',
@@ -1890,6 +1907,7 @@
           showSuccess(`تم رفع ${result.count} سجل بنجاح`);
           document.getElementById('import-preview').style.display = 'none';
           importData = null;
+          fileInput.value = ''; // Reset file input
           loadData();
         } catch (error) {
           showError('فشل رفع البيانات');

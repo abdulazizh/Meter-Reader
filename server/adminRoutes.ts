@@ -3,6 +3,8 @@ import multer from "multer";
 import { storage } from "./storage";
 import path from "node:path";
 import * as XLSX from "xlsx";
+import MDBReader from 'mdb-reader';
+import fs from 'node:fs';
 import type { InsertMeter } from "@shared/schema";
 
 // Multer configuration for file uploads
@@ -25,6 +27,25 @@ function requireAdmin(req: Request, res: Response, next: NextFunction) {
     return res.status(401).json({ error: "غير مصرح - يرجى تسجيل الدخول" });
   }
   return res.redirect('/admin/login');
+}
+
+// Helper functions for Access data transformation
+function mapCategory(typeCode: number): string {
+  const categories: Record<number, string> = {
+    1: 'منزلي',
+    2: 'تجاري',
+    3: 'صناعي',
+    4: 'حكومي',
+    5: 'زراعي',
+  };
+  return categories[typeCode] || 'منزلي';
+}
+
+function convertDate(date: any): Date {
+  if (!date) return new Date();
+  if (date instanceof Date) return date;
+  const parsed = new Date(date);
+  return isNaN(parsed.getTime()) ? new Date() : parsed;
 }
 
 export function registerAdminRoutes(app: Express) {
@@ -486,6 +507,99 @@ export function registerAdminRoutes(app: Express) {
     } catch (error) {
       console.error("Error importing Excel data:", error);
       res.status(500).json({ error: "Failed to import Excel data" });
+    }
+  });
+
+  // Access Database import endpoint
+  app.post("/api/admin/import-access/:type", upload.single('file'), requireAdmin, async (req, res) => {
+    try {
+      const { type } = req.params;
+      
+      if (!req.file) {
+        return res.status(400).json({ error: "File is required" });
+      }
+      
+      const buffer = fs.readFileSync(req.file.path);
+      const reader = new MDBReader(buffer);
+      
+      // Get table data - default to 'output' for meters
+      let tableName = type === 'readers' ? 'readers' : 'output'; 
+      
+      // Check if table exists
+      if (!reader.getTableNames().includes(tableName)) {
+        // If 'output' doesn't exist, try to find any table that might be relevant
+        const tables = reader.getTableNames();
+        if (tables.length > 0) {
+          tableName = tables[0];
+          console.log(`Table '${tableName}' not found, using first table: ${tableName}`);
+        } else {
+          return res.status(400).json({ error: `Table '${tableName}' not found in database and no other tables available.` });
+        }
+      }
+
+      const table = reader.getTable(tableName);
+      const jsonData = table.getData();
+      
+      if (!Array.isArray(jsonData)) {
+        return res.status(400).json({ error: "Could not read data from Access table" });
+      }
+      
+      let count = 0;
+      const readerIdsToUpdate = new Set<string>();
+      
+      if (type === "readers") {
+        for (const item of jsonData) {
+          await storage.createReader({
+            username: String(item.username || item.O_name || ''),
+            password: String(item.password || "123456"),
+            displayName: String(item.displayName || item.O_name || ''),
+          });
+          count++;
+        }
+      } else if (type === "meters") {
+        for (const item of jsonData) {
+          // Transform using logic from scripts/import-access-db.ts
+          const accountNumber = String(item.O_accountno || item.accountNumber || '');
+          if (!accountNumber) continue;
+
+          const currentAmount = String(item.o_amount || 0);
+          const debts = String(item.o_outs || 0);
+          const totalAmount = String(item.o_amount_all || 0);
+
+          await storage.createMeter({
+            accountNumber: accountNumber,
+            sequence: String(item.O_serial || item.sequence || "0"),
+            meterNumber: String(item.O_meter || item.meterNumber || ''),
+            category: mapCategory(Number(item.O_type || 0)),
+            subscriberName: String(item.O_name || item.subscriberName || 'غير محدد'),
+            address: String(item.O_address || item.address || ''),
+            record: String(item.O_streetno || item.record || "0"),
+            block: String(item.o_sect || item.block || "0"),
+            property: String(item.O_houseno || item.property || "0"),
+            previousReading: Number(item.O_prevread || item.previousReading) || 0,
+            previousReadingDate: convertDate(item.O_prevdt || item.O_avgdt || item.previousReadingDate),
+            currentAmount,
+            debts,
+            totalAmount,
+            readerId: String(item.readerId || ''),
+          });
+          if (item.readerId) readerIdsToUpdate.add(String(item.readerId));
+          count++;
+        }
+      }
+      
+      // Cleanup uploaded file
+      fs.unlinkSync(req.file.path);
+
+      // Increment versions for affected readers
+      for (const readerId of readerIdsToUpdate) {
+        await storage.incrementReaderAssignmentVersion(readerId);
+      }
+      
+      res.json({ success: true, count });
+    } catch (error) {
+      console.error("Error importing Access data:", error);
+      res.status(500).json({ error: "Failed to import Access data: " + (error as Error).message });
     }
   });
 
