@@ -20,12 +20,14 @@ declare module 'express-session' {
 }
 
 function requireAdmin(req: Request, res: Response, next: NextFunction) {
+  console.log(`Checking admin access for path: ${req.path}, sessionID: ${req.sessionID}, isAdmin: ${req.session?.isAdmin}`);
   if (req.session?.isAdmin) {
     return next();
   }
   if (req.path.startsWith('/api/')) {
     return res.status(401).json({ error: "غير مصرح - يرجى تسجيل الدخول" });
   }
+  console.log('Not authorized, redirecting to login');
   return res.redirect('/admin/login');
 }
 
@@ -58,9 +60,17 @@ export function registerAdminRoutes(app: Express) {
     console.log(`Login attempt for username: ${username}`);
     
     if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
-      console.log('Login successful');
+      console.log('Login successful, saving session...');
       req.session.isAdmin = true;
-      return res.json({ success: true });
+      req.session.save((err) => {
+        if (err) {
+          console.error('Session save error:', err);
+          return res.status(500).json({ success: false, error: "فشل حفظ الجلسة" });
+        }
+        console.log('Session saved successfully');
+        return res.json({ success: true });
+      });
+      return;
     }
     
     console.log('Login failed: invalid credentials');

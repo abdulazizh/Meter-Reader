@@ -323,7 +323,7 @@ function setupErrorHandler(app: express.Application) {
     cookie: { 
       secure: isProd,
       httpOnly: true,
-      sameSite: isProd ? 'none' : 'lax',
+      sameSite: 'lax',
       maxAge: 24 * 60 * 60 * 1000 // 24 hours
     }
   }));
