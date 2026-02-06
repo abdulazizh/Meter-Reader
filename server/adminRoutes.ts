@@ -55,12 +55,15 @@ export function registerAdminRoutes(app: Express) {
 
   app.post("/api/admin/login", (req, res) => {
     const { username, password } = req.body;
+    console.log(`Login attempt for username: ${username}`);
     
     if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+      console.log('Login successful');
       req.session.isAdmin = true;
       return res.json({ success: true });
     }
     
+    console.log('Login failed: invalid credentials');
     return res.status(401).json({ success: false, error: "اسم المستخدم أو كلمة المرور غير صحيحة" });
   });
 

@@ -311,13 +311,19 @@ function setupErrorHandler(app: express.Application) {
   // Multer configuration for file uploads
   const upload = multer({ dest: 'uploads/' });
   
+  const isProd = process.env.NODE_ENV === 'production';
+  log(`Session configuration: NODE_ENV=${process.env.NODE_ENV}, secureCookies=${isProd}`);
+
   app.use(session({
     secret: process.env.SESSION_SECRET || 'dev-secret-key-change-in-production',
     resave: false,
     saveUninitialized: false,
+    proxy: true, // Required for secure cookies behind a proxy
+    name: 'meter-reader.sid',
     cookie: { 
-      secure: process.env.NODE_ENV === 'production',
+      secure: isProd,
       httpOnly: true,
+      sameSite: isProd ? 'none' : 'lax',
       maxAge: 24 * 60 * 60 * 1000 // 24 hours
     }
   }));

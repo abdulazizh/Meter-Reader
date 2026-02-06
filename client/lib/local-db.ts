@@ -63,7 +63,7 @@ export const saveReadingToLocalDB = (
   longitude?: number
 ) => {
   try {
-    db.run(
+    db.runSync(
       `INSERT OR REPLACE INTO readings 
       (id, meterId, readerId, newReading, photoUri, photoFileName, notes, skipReason, latitude, longitude, createdAt, isCompleted, synced) 
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0)`,
@@ -114,7 +114,7 @@ export const getPendingReadingsFromDB = (): any[] => {
 // Mark reading as synced
 export const markReadingAsSynced = (id: string) => {
   try {
-    db.run(`UPDATE readings SET synced = 1 WHERE id = ?`, [id]);
+    db.runSync(`UPDATE readings SET synced = 1 WHERE id = ?`, [id]);
     console.log('Reading marked as synced');
     return true;
   } catch (error) {
@@ -126,7 +126,7 @@ export const markReadingAsSynced = (id: string) => {
 // Save meter to local database
 export const saveMeterToLocalDB = (meter: any) => {
   try {
-    db.run(
+    db.runSync(
       `INSERT OR REPLACE INTO meters 
       (id, accountNumber, sequence, meterNumber, category, subscriberName, record, block, property, 
        previousReading, previousReadingDate, currentAmount, debts, totalAmount, address, readerId) 
@@ -162,17 +162,43 @@ export const saveMeterToLocalDB = (meter: any) => {
 // Get all meters from local database
 export const getMetersFromLocalDB = (readerId: string): any[] => {
   try {
-    return db.getAllSync(
-      `SELECT m.*, r.newReading as latestReadingValue, r.photoUri as latestReadingPhotoUri, 
-              r.photoFileName as latestReadingPhotoFileName, r.notes as latestReadingNotes,
-              r.createdAt as latestReadingDate
+    const rows = db.getAllSync(
+      `SELECT m.*, r.id as r_id, r.newReading as r_newReading, r.photoUri as r_photoUri, 
+              r.photoFileName as r_photoFileName, r.notes as r_notes,
+              r.skipReason as r_skipReason, r.createdAt as r_createdAt,
+              r.latitude as r_latitude, r.longitude as r_longitude
        FROM meters m
        LEFT JOIN readings r ON m.id = r.meterId
        WHERE m.readerId = ?
        GROUP BY m.id
        ORDER BY m.sequence`,
       [readerId]
-    );
+    ) as any[];
+
+    return rows.map(row => {
+      const { 
+        r_id, r_newReading, r_photoUri, r_photoFileName, r_notes, 
+        r_skipReason, r_createdAt, r_latitude, r_longitude,
+        ...meter 
+      } = row;
+      
+      return {
+        ...meter,
+        latestReading: r_id ? {
+          id: r_id,
+          newReading: r_newReading,
+          meterId: meter.id,
+          readerId: meter.readerId,
+          photoPath: r_photoFileName,
+          notes: r_notes,
+          skipReason: r_skipReason,
+          createdAt: r_createdAt,
+          readingDate: r_createdAt,
+          latitude: r_latitude,
+          longitude: r_longitude
+        } : null
+      };
+    });
   } catch (error) {
     console.log('Error getting meters from local DB:', error);
     return [];

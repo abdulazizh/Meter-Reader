@@ -224,7 +224,6 @@ export default function MetersListScreen() {
     loadFromLocalDB();
   }, [loadFromLocalDB]);
 
-  const meters = (apiMeters && apiMeters.length > 0) ? apiMeters : localMeters;
   const isLoading = isApiLoading && localMeters.length === 0;
 
   const loadPending = useCallback(async () => {
@@ -232,108 +231,60 @@ export default function MetersListScreen() {
     setPendingReadings(pending);
   }, []);
 
-  // Check for assignment version changes and clear local DB if needed
-  useEffect(() => {
-    const checkAssignmentVersion = async () => {
-      if (!reader) return;
-      
-      try {
-        const storedVersion = await AsyncStorage.getItem(LOCAL_ASSIGNMENT_VERSION_KEY);
-        const currentVersion = reader.assignmentVersion || 0;
-        
-        if (storedVersion === null) {
-          // First time, just save version
-          await AsyncStorage.setItem(LOCAL_ASSIGNMENT_VERSION_KEY, currentVersion.toString());
-        } else if (parseInt(storedVersion) < currentVersion) {
-          console.log(`Assignment version changed: ${storedVersion} -> ${currentVersion}. Clearing local DB.`);
-          const cleared = await clearLocalDB();
-          if (cleared) {
-            await AsyncStorage.setItem(LOCAL_ASSIGNMENT_VERSION_KEY, currentVersion.toString());
-            // Refetch meters after clearing
-            refetch();
-          }
-        }
-      } catch (error) {
-        console.error("Error checking assignment version:", error);
-      }
-    };
+  // Merge meters with pending readings for immediate UI feedback
+  const combinedMeters = useMemo(() => {
+    const baseMeters = (apiMeters && apiMeters.length > 0) ? apiMeters : localMeters;
     
-    checkAssignmentVersion();
-  }, [reader, refetch]);
-
-  // Sync fetched meters to local SQLite database
-  useEffect(() => {
-    if (apiMeters && apiMeters.length > 0) {
-      apiMeters.forEach(meter => {
-        saveMeterToLocalDB(meter);
-      });
-      // Optionally reload from local DB to ensure UI is in sync with DB state
-      // loadFromLocalDB(); 
-    }
-  }, [apiMeters]);
-
-  // إعادة تحميل البيانات عند العودة للشاشة لعكس التحديثات المحلية
-  useEffect(() => {
-    const unsubscribe = navigation.addListener('focus', () => {
-      refetch();
-      loadPending();
-    });
-    return unsubscribe;
-  }, [navigation, refetch, loadPending]);
-
-  useEffect(() => {
-    loadPending();
-  }, [loadPending]);
-
-  // Monitor network connectivity but disable automatic sync to respect manual sync policy
-  // Manual sync only when user presses the sync button
-  useEffect(() => {
-    const unsubscribe = NetInfo.addEventListener((state: any) => {
-      // Do nothing on connection changes - sync only happens manually
-      // This prevents automatic retries that were causing continuous sync attempts
-      console.log('Network state changed:', state.isConnected ? 'Connected' : 'Disconnected');
+    // Create a map of pending readings for quick lookup
+    const pendingMap = new Map();
+    pendingReadings.forEach(pr => {
+      pendingMap.set(pr.meterId, pr);
     });
 
-    return () => unsubscribe();
-  }, []);
+    if (pendingMap.size === 0) return baseMeters;
 
-  // Reload pending readings when screen comes into focus
-  useEffect(() => {
-    const unsubscribe = navigation.addListener('focus', () => {
-      loadPending();
-    });
-    return unsubscribe;
-  }, [navigation, loadPending]);
-
-  // Refetch meters when app comes back from background
-  useEffect(() => {
-    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
-      if (nextAppState === 'active') {
-        // Small delay to ensure network is ready
-        setTimeout(() => {
-          refetch();
-        }, 1000);
+    return baseMeters.map(meter => {
+      const pending = pendingMap.get(meter.id);
+      if (pending) {
+        return {
+          ...meter,
+          latestReading: {
+            id: pending.id,
+            newReading: pending.newReading,
+            meterId: meter.id,
+            readerId: meter.readerId,
+            photoPath: pending.photoFileName,
+            notes: pending.notes,
+            skipReason: pending.skipReason,
+            createdAt: pending.createdAt,
+            readingDate: pending.createdAt,
+            isCompleted: true,
+            latitude: pending.latitude,
+            longitude: pending.longitude
+          }
+        };
       }
+      return meter;
     });
+  }, [apiMeters, localMeters, pendingReadings]);
 
-    return () => {
-      subscription?.remove();
-    };
-  }, [refetch]);
-
-  const filteredMeters = meters.filter((meter) => {
+  const filteredMeters = useMemo(() => {
     const query = searchQuery.toLowerCase();
-    return (
-      meter.accountNumber.toLowerCase().includes(query) ||
-      meter.sequence.toLowerCase().includes(query) ||
-      meter.meterNumber.toLowerCase().includes(query) ||
-      meter.subscriberName.toLowerCase().includes(query)
-    );
-  });
+    return combinedMeters.filter((meter) => {
+      return (
+        meter.accountNumber.toLowerCase().includes(query) ||
+        meter.sequence.toLowerCase().includes(query) ||
+        meter.meterNumber.toLowerCase().includes(query) ||
+        meter.subscriberName.toLowerCase().includes(query)
+      );
+    });
+  }, [combinedMeters, searchQuery]);
 
-  const completedCount = meters.filter(
-    (m) => m.latestReading !== null && m.latestReading !== undefined
-  ).length;
+  const completedCount = useMemo(() => {
+    return combinedMeters.filter(
+      (m) => m.latestReading !== null && m.latestReading !== undefined
+    ).length;
+  }, [combinedMeters]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -467,7 +418,7 @@ export default function MetersListScreen() {
               التقدم
             </ThemedText>
             <ThemedText style={[styles.progressCount, { color: AppColors.primary }]}>
-              {completedCount}/{meters.length} مكتملة
+              {completedCount}/{combinedMeters.length} مكتملة
             </ThemedText>
           </View>
           <View style={[styles.progressTrack, { backgroundColor: theme.border }]}>
@@ -476,7 +427,7 @@ export default function MetersListScreen() {
                 styles.progressFill,
                 {
                   backgroundColor: AppColors.success,
-                  width: meters.length > 0 ? `${(completedCount / meters.length) * 100}%` : "0%",
+                  width: combinedMeters.length > 0 ? `${(completedCount / combinedMeters.length) * 100}%` : "0%",
                 },
               ]}
             />
