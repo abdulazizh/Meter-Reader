@@ -8,7 +8,7 @@ import * as fs from "fs";
 import * as path from "path";
 
 const app = express();
-app.set('trust proxy', 1); // Trust Render's proxy for secure cookies
+app.set('trust proxy', true); // Trust Render's proxy for secure cookies
 const log = console.log;
 
 declare module "http" {
@@ -43,6 +43,16 @@ function setupCors(app: express.Application) {
       if (origin) {
         res.header("Access-Control-Allow-Origin", origin);
         res.header("Access-Control-Allow-Credentials", "true");
+      } else if (process.env.NODE_ENV === "production") {
+        // In production, if origin is missing, we use the host header to avoid '*' 
+        // which breaks credentialed requests
+        const host = req.header("host");
+        if (host) {
+          res.header("Access-Control-Allow-Origin", `https://${host}`);
+          res.header("Access-Control-Allow-Credentials", "true");
+        } else {
+          res.header("Access-Control-Allow-Origin", "*");
+        }
       } else {
         // Fallback for older app versions or if origin stripping occurs
         res.header("Access-Control-Allow-Origin", "*");
@@ -323,7 +333,7 @@ function setupErrorHandler(app: express.Application) {
     cookie: { 
       secure: isProd,
       httpOnly: true,
-      sameSite: 'lax',
+      sameSite: isProd ? 'none' : 'lax',
       maxAge: 24 * 60 * 60 * 1000 // 24 hours
     }
   }));
