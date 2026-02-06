@@ -37,7 +37,7 @@ export const meters = pgTable("meters", {
   currentAmount: numeric("current_amount", { precision: 12, scale: 2 }).notNull().default("0"),
   debts: numeric("debts", { precision: 12, scale: 2 }).notNull().default("0"),
   totalAmount: numeric("total_amount", { precision: 12, scale: 2 }).notNull().default("0"),
-  readerId: varchar("reader_id").notNull().references(() => readers.id),
+  readerId: varchar("reader_id").references(() => readers.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

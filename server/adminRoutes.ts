@@ -4,7 +4,8 @@ import { storage } from "./storage";
 import path from "node:path";
 import * as XLSX from "xlsx";
 import MDBReader from 'mdb-reader';
-import fs from 'node:fs';
+import * as fs from 'node:fs';
+XLSX.set_fs(fs);
 import type { InsertMeter } from "@shared/schema";
 
 // Multer configuration for file uploads
@@ -174,6 +175,11 @@ export function registerAdminRoutes(app: Express) {
       if (meterData.address === undefined) {
         meterData.address = "";
       }
+
+      // Sanitize readerId
+      if (meterData.readerId === "" || meterData.readerId === "null" || meterData.readerId === undefined) {
+        meterData.readerId = null;
+      }
       
       const meter = await storage.createMeter(meterData);
       res.status(201).json(meter);
@@ -199,6 +205,13 @@ export function registerAdminRoutes(app: Express) {
               (updateData as any)[key] = undefined;
             } else if (typeof value === 'string') {
               (updateData as any)[key] = new Date(value);
+            } else {
+              (updateData as any)[key] = value;
+            }
+            break;
+          case 'readerId':
+            if (value === "" || value === "null" || value === undefined) {
+              (updateData as any)[key] = null;
             } else {
               (updateData as any)[key] = value;
             }
@@ -409,7 +422,7 @@ export function registerAdminRoutes(app: Express) {
             currentAmount: item.currentAmount || "0",
             debts: item.debts || "0",
             totalAmount: item.totalAmount || "0",
-            readerId: item.readerId,
+            readerId: item.readerId && String(item.readerId).trim() !== "" ? String(item.readerId) : null,
           });
           if (item.readerId) readerIdsToUpdate.add(item.readerId);
           count++;
@@ -450,10 +463,11 @@ export function registerAdminRoutes(app: Express) {
       }
       
       // Parse Excel file
-      const workbook = XLSX.readFile(req.file.path);
+      const xlsxLib: any = XLSX.readFile ? XLSX : (XLSX as any).default;
+      const workbook = xlsxLib.readFile(req.file.path);
       const sheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[sheetName];
-      const jsonData: any[] = XLSX.utils.sheet_to_json(worksheet);
+      const jsonData: any[] = xlsxLib.utils.sheet_to_json(worksheet);
       
       if (!Array.isArray(jsonData)) {
         return res.status(400).json({ error: "Data must be in tabular format" });
@@ -505,7 +519,7 @@ export function registerAdminRoutes(app: Express) {
             currentAmount: item['المبلغ الحالي'] || item['currentAmount'] || "0",
             debts: item['الديون'] || item['debts'] || "0",
             totalAmount: item['المجموع'] || item['totalAmount'] || "0",
-            readerId: readerId,
+            readerId: readerId && String(readerId).trim() !== "" ? String(readerId) : null,
           });
           if (readerId) readerIdsToUpdate.add(readerId);
           count++;
@@ -596,7 +610,7 @@ export function registerAdminRoutes(app: Express) {
             currentAmount,
             debts,
             totalAmount,
-            readerId: String(item.readerId || ''),
+            readerId: item.readerId && String(item.readerId).trim() !== "" ? String(item.readerId) : null,
           });
           if (item.readerId) readerIdsToUpdate.add(String(item.readerId));
           count++;
@@ -659,12 +673,13 @@ export function registerAdminRoutes(app: Express) {
       }
       
       // Create Excel workbook
-      const workbook = XLSX.utils.book_new();
-      const worksheet = XLSX.utils.json_to_sheet(templateData);
-      XLSX.utils.book_append_sheet(workbook, worksheet, 'Template');
+      const xlsxLib: any = XLSX.utils ? XLSX : (XLSX as any).default;
+      const workbook = xlsxLib.utils.book_new();
+      const worksheet = xlsxLib.utils.json_to_sheet(templateData);
+      xlsxLib.utils.book_append_sheet(workbook, worksheet, 'Template');
       
       // Generate buffer
-      const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+      const buffer = xlsxLib.write(workbook, { type: 'buffer', bookType: 'xlsx' });
       
       // Send as attachment
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
