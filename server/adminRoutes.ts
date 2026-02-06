@@ -535,9 +535,18 @@ export function registerAdminRoutes(app: Express) {
         await storage.incrementReaderAssignmentVersion(readerId);
       }
       
+      // Cleanup uploaded file
+      if (req.file) {
+        fs.unlinkSync(req.file.path);
+      }
+      
+      console.log(`Excel import completed: type=${type}, count=${count}`);
       res.json({ success: true, count });
     } catch (error) {
       console.error("Error importing Excel data:", error);
+      if (req.file && fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
       res.status(500).json({ error: "Failed to import Excel data" });
     }
   });
@@ -621,17 +630,18 @@ export function registerAdminRoutes(app: Express) {
         }
       }
       
-      // Cleanup uploaded file
-      fs.unlinkSync(req.file.path);
-
       // Increment versions for affected readers
       for (const readerId of readerIdsToUpdate) {
         await storage.incrementReaderAssignmentVersion(readerId);
       }
       
+      console.log(`Access import completed: type=${type}, count=${count}`);
       res.json({ success: true, count });
     } catch (error) {
       console.error("Error importing Access data:", error);
+      if (req.file && fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
       res.status(500).json({ error: "Failed to import Access data: " + (error as Error).message });
     }
   });

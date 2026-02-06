@@ -11,7 +11,7 @@ import {
   type MeterWithReading,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, sql } from "drizzle-orm";
 
 export interface IStorage {
   getReader(id: string): Promise<Reader | undefined>;
@@ -51,23 +51,31 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getMetersByReaderId(readerId: string): Promise<MeterWithReading[]> {
-    const metersList = await db
-      .select()
+    const rows = await db
+      .select({
+        meter: meters,
+        reading: readings,
+      })
       .from(meters)
+      .leftJoin(
+        readings,
+        and(
+          eq(meters.id, readings.meterId),
+          sql`${readings.id} = (
+            SELECT id FROM ${readings} 
+            WHERE meter_id = ${meters.id} 
+            ORDER BY created_at DESC 
+            LIMIT 1
+          )`
+        )
+      )
       .where(eq(meters.readerId, readerId))
       .orderBy(meters.sequence);
 
-    const metersWithReadings: MeterWithReading[] = [];
-    
-    for (const meter of metersList) {
-      const latestReading = await this.getLatestReadingByMeterId(meter.id);
-      metersWithReadings.push({
-        ...meter,
-        latestReading: latestReading || null,
-      });
-    }
-
-    return metersWithReadings;
+    return rows.map((row) => ({
+      ...row.meter,
+      latestReading: row.reading || null,
+    }));
   }
 
   async getMeterById(id: string): Promise<Meter | undefined> {
@@ -160,18 +168,30 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllMeters(): Promise<MeterWithReading[]> {
-    const metersList = await db.select().from(meters).orderBy(meters.sequence);
-    const metersWithReadings: MeterWithReading[] = [];
-    
-    for (const meter of metersList) {
-      const latestReading = await this.getLatestReadingByMeterId(meter.id);
-      metersWithReadings.push({
-        ...meter,
-        latestReading: latestReading || null,
-      });
-    }
+    const rows = await db
+      .select({
+        meter: meters,
+        reading: readings,
+      })
+      .from(meters)
+      .leftJoin(
+        readings,
+        and(
+          eq(meters.id, readings.meterId),
+          sql`${readings.id} = (
+            SELECT id FROM ${readings} 
+            WHERE meter_id = ${meters.id} 
+            ORDER BY created_at DESC 
+            LIMIT 1
+          )`
+        )
+      )
+      .orderBy(meters.sequence);
 
-    return metersWithReadings;
+    return rows.map((row) => ({
+      ...row.meter,
+      latestReading: row.reading || null,
+    }));
   }
 
   async updateMeter(id: string, data: Partial<InsertMeter>): Promise<Meter> {
