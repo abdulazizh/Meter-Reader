@@ -121,5 +121,5 @@ export type InsertReading = z.infer<typeof insertReadingSchema>;
 export type Reading = typeof readings.$inferSelect;
 
 export type MeterWithReading = Meter & {
-  latestReading?: Reading | null;
+  latestReading?: (Reading & { localPhotoUri?: string | null }) | null;
 };

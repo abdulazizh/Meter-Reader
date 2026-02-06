@@ -69,6 +69,29 @@ export default function ReadingEntryScreen() {
   const [mediaLibraryPermission, requestMediaLibraryPermission] = MediaLibrary.usePermissions();
   const [isSaving, setIsSaving] = useState(false);
 
+  // Initialize form with existing reading data if available
+  React.useEffect(() => {
+    if (meter.latestReading) {
+      if (meter.latestReading.newReading !== null && meter.latestReading.newReading !== undefined) {
+        setNewReading(meter.latestReading.newReading.toString());
+      }
+      if (meter.latestReading.notes) {
+        setNotes(meter.latestReading.notes);
+      }
+      
+      // Handle photo display
+      if (meter.latestReading.localPhotoUri) {
+        console.log("Loading local photo URI:", meter.latestReading.localPhotoUri);
+        setPhotoUri(meter.latestReading.localPhotoUri);
+      } else if (meter.latestReading.photoPath) {
+        const baseUrl = getApiUrl();
+        const photoUrl = `${baseUrl.replace(/\/$/, '')}/api/photo/${meter.latestReading.photoPath}`;
+        console.log("Loading server photo URL:", photoUrl);
+        setPhotoUri(photoUrl);
+      }
+    }
+  }, [meter]);
+
   const hasPrevious = currentIndex > 0;
   const hasNext = currentIndex < allMeters.length - 1;
   const isCompleted = meter.latestReading !== null && meter.latestReading !== undefined;
@@ -208,8 +231,8 @@ export default function ReadingEntryScreen() {
       meter.id,
       meter.readerId,
       null,
-      "",
-      "",
+      null,
+      null,
       undefined,
       reasonLabel,
       latitude,
@@ -402,7 +425,7 @@ export default function ReadingEntryScreen() {
       meter.id,
       meter.readerId,
       readingValue,
-      photoUri || "",
+      photoUri,
       photoFileName,
       notes.trim() || undefined,
       undefined,

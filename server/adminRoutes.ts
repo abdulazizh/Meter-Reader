@@ -5,7 +5,11 @@ import path from "node:path";
 import * as XLSX from "xlsx";
 import MDBReader from 'mdb-reader';
 import * as fs from 'node:fs';
-XLSX.set_fs(fs);
+// Handle ESM/CJS compatibility for XLSX
+const xlsxLib: any = typeof (XLSX as any).set_fs === 'function' ? XLSX : (XLSX as any).default;
+if (xlsxLib && typeof xlsxLib.set_fs === 'function') {
+  xlsxLib.set_fs(fs);
+}
 import type { InsertMeter } from "@shared/schema";
 
 // Multer configuration for file uploads
@@ -463,7 +467,7 @@ export function registerAdminRoutes(app: Express) {
       }
       
       // Parse Excel file
-      const xlsxLib: any = XLSX.readFile ? XLSX : (XLSX as any).default;
+      const xlsxLib: any = typeof (XLSX as any).readFile === 'function' ? XLSX : (XLSX as any).default;
       const workbook = xlsxLib.readFile(req.file.path);
       const sheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[sheetName];
@@ -673,7 +677,7 @@ export function registerAdminRoutes(app: Express) {
       }
       
       // Create Excel workbook
-      const xlsxLib: any = XLSX.utils ? XLSX : (XLSX as any).default;
+      const xlsxLib: any = typeof (XLSX as any).utils === 'object' ? XLSX : (XLSX as any).default;
       const workbook = xlsxLib.utils.book_new();
       const worksheet = xlsxLib.utils.json_to_sheet(templateData);
       xlsxLib.utils.book_append_sheet(workbook, worksheet, 'Template');
