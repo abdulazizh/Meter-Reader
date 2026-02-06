@@ -1854,7 +1854,16 @@
 
     async function confirmImport() {
       if (!importData) return;
-      const type = document.getElementById('import-type').value;
+      const btn = event?.target || document.querySelector('#import-preview .btn-success');
+      const originalText = btn.textContent;
+      
+      console.log("Starting import process...", { type: document.getElementById('import-type').value, importData });
+      
+      try {
+        btn.disabled = true;
+        btn.textContent = 'جاري الرفع...';
+        
+        const type = document.getElementById('import-type').value;
       
       // Get the selected file
       const fileInput = document.getElementById('import-file');
@@ -1910,8 +1919,13 @@
           fileInput.value = ''; // Reset file input
           loadData();
         } catch (error) {
-          showError('فشل رفع البيانات');
+          console.error("JSON/CSV Import error:", error);
+          showError('فشل رفع البيانات: ' + error.message);
         }
+        }
+      } finally {
+        btn.disabled = false;
+        btn.textContent = originalText;
       }
     }
 

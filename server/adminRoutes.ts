@@ -430,8 +430,9 @@ export function registerAdminRoutes(app: Express) {
   
   // New endpoint for Excel file import
   app.post("/api/admin/import-excel/:type", upload.single('file'), requireAdmin, async (req, res) => {
+    const { type } = req.params;
+    console.log(`Starting Excel import: type=${type}, file=${req.file?.originalname}`);
     try {
-      const { type } = req.params;
       
       if (!req.file) {
         return res.status(400).json({ error: "File is required" });
@@ -525,8 +526,9 @@ export function registerAdminRoutes(app: Express) {
 
   // Access Database import endpoint
   app.post("/api/admin/import-access/:type", upload.single('file'), requireAdmin, async (req, res) => {
+    const { type } = req.params;
+    console.log(`Starting Access import: type=${type}, file=${req.file?.originalname}`);
     try {
-      const { type } = req.params;
       
       if (!req.file) {
         return res.status(400).json({ error: "File is required" });
