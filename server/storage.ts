@@ -28,7 +28,10 @@ export interface IStorage {
   createReading(reading: InsertReading): Promise<Reading>;
   updateMeterAfterReading(meterId: string, newReading: number): Promise<void>;
   incrementReaderAssignmentVersion(readerId: string): Promise<void>;
+  bulkCreateMeters(meters: InsertMeter[]): Promise<void>;
+  bulkCreateReaders(readers: InsertReader[]): Promise<void>;
   deleteAllMeters(): Promise<void>;
+  deleteAllReadings(): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -163,6 +166,22 @@ export class DatabaseStorage implements IStorage {
       .where(eq(readers.id, readerId));
   }
 
+  async bulkCreateMeters(insertMeters: InsertMeter[]): Promise<void> {
+    if (insertMeters.length === 0) return;
+    
+    // Split into chunks to avoid potential limits with many parameters
+    const chunkSize = 100;
+    for (let i = 0; i < insertMeters.length; i += chunkSize) {
+      const chunk = insertMeters.slice(i, i + chunkSize);
+      await db.insert(meters).values(chunk);
+    }
+  }
+
+  async bulkCreateReaders(insertReaders: InsertReader[]): Promise<void> {
+    if (insertReaders.length === 0) return;
+    await db.insert(readers).values(insertReaders);
+  }
+
   async deleteReader(id: string): Promise<void> {
     await db.delete(readers).where(eq(readers.id, id));
   }
@@ -233,6 +252,10 @@ export class DatabaseStorage implements IStorage {
 
   async deleteReading(id: string): Promise<void> {
     await db.delete(readings).where(eq(readings.id, id));
+  }
+
+  async deleteAllReadings(): Promise<void> {
+    await db.delete(readings);
   }
 
   async getReadingsByMonth(year: number, month: number): Promise<Reading[]> {

@@ -4,9 +4,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as Sharing from "expo-sharing";
-import * as FileSystem from "expo-file-system/legacy";
-import { writeAsStringAsync } from "expo-file-system/legacy";
-import Constants from 'expo-constants';
+import { File, Paths } from "expo-file-system";
+import * as ExpoFileSystem from "expo-file-system/legacy";
+import Constants from "expo-constants";
 import * as XLSX from "xlsx";
 
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
@@ -15,6 +15,8 @@ import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius, AppColors } from "@/constants/theme";
 import { apiRequest, getApiUrl } from "@/lib/query-client";
 import { useAuth } from "@/contexts/AuthContext";
+import { getExportDataFromLocalDB } from "@/lib/local-db";
+import { syncPendingReadings } from "@/lib/sync-utils";
 
 interface SettingsItemProps {
   icon: keyof typeof Feather.glyphMap;
@@ -24,7 +26,13 @@ interface SettingsItemProps {
   showArrow?: boolean;
 }
 
-function SettingsItem({ icon, title, subtitle, onPress, showArrow = true }: SettingsItemProps) {
+function SettingsItem({
+  icon,
+  title,
+  subtitle,
+  onPress,
+  showArrow = true,
+}: SettingsItemProps) {
   const { theme } = useTheme();
 
   const handlePress = async () => {
@@ -37,16 +45,26 @@ function SettingsItem({ icon, title, subtitle, onPress, showArrow = true }: Sett
       onPress={handlePress}
       style={({ pressed }) => [
         styles.settingsItem,
-        { backgroundColor: theme.backgroundDefault, opacity: pressed ? 0.8 : 1 },
+        {
+          backgroundColor: theme.backgroundDefault,
+          opacity: pressed ? 0.8 : 1,
+        },
       ]}
     >
-      <View style={[styles.iconContainer, { backgroundColor: theme.backgroundSecondary }]}>
+      <View
+        style={[
+          styles.iconContainer,
+          { backgroundColor: theme.backgroundSecondary },
+        ]}
+      >
         <Feather name={icon} size={20} color={AppColors.primary} />
       </View>
       <View style={styles.itemContent}>
         <ThemedText style={styles.itemTitle}>{title}</ThemedText>
         {subtitle ? (
-          <ThemedText style={[styles.itemSubtitle, { color: theme.textSecondary }]}>
+          <ThemedText
+            style={[styles.itemSubtitle, { color: theme.textSecondary }]}
+          >
             {subtitle}
           </ThemedText>
         ) : null}
@@ -73,7 +91,9 @@ export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const { reader, logout } = useAuth();
-  const [readerProfile, setReaderProfile] = useState<ReaderProfile | null>(null);
+  const [readerProfile, setReaderProfile] = useState<ReaderProfile | null>(
+    null,
+  );
   const [isExporting, setIsExporting] = useState(false);
 
   const readerId = reader?.id || null;
@@ -96,24 +116,20 @@ export default function SettingsScreen() {
   };
 
   const handleLogout = async () => {
-    Alert.alert(
-      "تسجيل الخروج",
-      "هل أنت متأكد من تسجيل الخروج؟",
-      [
-        {
-          text: "إلغاء",
-          style: "cancel",
+    Alert.alert("تسجيل الخروج", "هل أنت متأكد من تسجيل الخروج؟", [
+      {
+        text: "إلغاء",
+        style: "cancel",
+      },
+      {
+        text: "خروج",
+        style: "destructive",
+        onPress: async () => {
+          await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          await logout();
         },
-        {
-          text: "خروج",
-          style: "destructive",
-          onPress: async () => {
-            await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            await logout();
-          },
-        },
-      ]
-    );
+      },
+    ]);
   };
 
   const handleExport = async () => {
@@ -126,21 +142,22 @@ export default function SettingsScreen() {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
-      const url = new URL(`/api/export/${readerId}`, getApiUrl());
-      const response = await fetch(url.toString());
-      const data = await response.json();
+      // Use local database instead of API to include unsynced readings
+      const data = getExportDataFromLocalDB(readerId);
 
-      const fileName = `meter_readings_${new Date().toISOString().split('T')[0]}.json`;
+      const fileName = `meter_readings_${new Date().toISOString().split("T")[0]}.json`;
+
+      // Use legacy API with any cast
+      const fs = ExpoFileSystem as any;
+      const docDir = fs.documentDirectory;
       
-      // Access document directory dynamically
-      const docDir = (FileSystem as any).documentDirectory;
       if (!docDir) {
         throw new Error("Could not access document directory");
       }
-      
+
       const filePath = `${docDir}${fileName}`;
-      
-      await writeAsStringAsync(filePath, JSON.stringify(data, null, 2));
+
+      await fs.writeAsStringAsync(filePath, JSON.stringify(data, null, 2));
 
       const canShare = await Sharing.isAvailableAsync();
       if (canShare) {
@@ -148,7 +165,9 @@ export default function SettingsScreen() {
           mimeType: "application/json",
           dialogTitle: "تصدير القراءات",
         });
-        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        await Haptics.notificationAsync(
+          Haptics.NotificationFeedbackType.Success,
+        );
       } else {
         Alert.alert("تم التصدير", `تم حفظ الملف: ${fileName}`);
       }
@@ -158,6 +177,34 @@ export default function SettingsScreen() {
       Alert.alert("خطأ", "حدث خطأ أثناء تصدير البيانات");
     } finally {
       setIsExporting(false);
+    }
+  };
+
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const handleSync = async () => {
+    if (isSyncing) return;
+
+    setIsSyncing(true);
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    try {
+      const { successCount, failCount, errors } = await syncPendingReadings();
+
+      if (successCount > 0) {
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        Alert.alert("تمت المزامنة", `تمت مزامنة ${successCount} قراءة بنجاح${failCount > 0 ? `، ${failCount} فشلت` : ''}.`);
+      } else if (failCount > 0) {
+        const errorMessage = errors.length > 0 ? errors[0] : `فشلت مزامنة ${failCount} قراءة.`;
+        Alert.alert("فشلت المزامنة", errorMessage);
+      } else {
+        Alert.alert("لا توجد بيانات", "جميع القراءات مزامنة بالفعل.");
+      }
+    } catch (error) {
+      console.error("Sync error:", error);
+      Alert.alert("خطأ", "حدث خطأ أثناء المزامنة");
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -171,34 +218,35 @@ export default function SettingsScreen() {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
-      const url = new URL(`/api/export/${readerId}`, getApiUrl());
-      const response = await fetch(url.toString());
-      const data = await response.json();
-
+      const data = getExportDataFromLocalDB(readerId);
+      console.log(`Exporting data for reader ${readerId}. Meters count: ${data.meters?.length || 0}`);
+      
       // Prepare Excel data
       const workbook = XLSX.utils.book_new();
-      
+
       // Create meters sheet
       if (data.meters && Array.isArray(data.meters)) {
         const metersData = data.meters.map((meter: any) => ({
-          'رقم الحساب': meter.accountNumber,
-          'تسلسل': meter.sequence,
-          'رقم المقياس': meter.meterNumber,
-          'الصنف': meter.category,
-          'اسم المشترك': meter.subscriberName,
-          'العنوان': `${meter.address.record || ''} ${meter.address.block || ''} ${meter.address.property || ''}`,
-          'القراءة_previous': meter.previousReading,
-          'تاريخ القراءة_previous': meter.previousReadingDate ? new Date(meter.previousReadingDate).toLocaleDateString('ar-IQ') : '',
-          'المبلغ الحالي': meter.amounts?.currentAmount || 0,
-          'الديون': meter.amounts?.debts || 0,
-          'المجموع': meter.amounts?.totalAmount || 0,
-          'القراءات المكتملة': meter.readings?.length || 0,
+          "رقم الحساب": meter.accountNumber,
+          تسلسل: meter.sequence,
+          "رقم المقياس": meter.meterNumber,
+          الصنف: meter.category,
+          "اسم المشترك": meter.subscriberName,
+          العنوان: `${meter.address.record || ""} ${meter.address.block || ""} ${meter.address.property || ""}`,
+          القراءة_previous: meter.previousReading,
+          "تاريخ القراءة_previous": meter.previousReadingDate
+            ? new Date(meter.previousReadingDate).toLocaleDateString("ar-IQ")
+            : "",
+          "المبلغ الحالي": meter.amounts?.currentAmount || 0,
+          الديون: meter.amounts?.debts || 0,
+          المجموع: meter.amounts?.totalAmount || 0,
+          "القراءات المكتملة": meter.readings?.length || 0,
         }));
-        
+
         const metersSheet = XLSX.utils.json_to_sheet(metersData);
-        XLSX.utils.book_append_sheet(workbook, metersSheet, 'المشتركين');
+        XLSX.utils.book_append_sheet(workbook, metersSheet, "المشتركين");
       }
-      
+
       // Create readings sheet if readings exist
       if (data.meters && Array.isArray(data.meters)) {
         const allReadings: any[] = [];
@@ -206,60 +254,67 @@ export default function SettingsScreen() {
           if (meter.readings && Array.isArray(meter.readings)) {
             meter.readings.forEach((reading: any) => {
               allReadings.push({
-                'رقم الحساب': meter.accountNumber,
-                'اسم المشترك': meter.subscriberName,
-                'الصنف': meter.category,
-                'العنوان': `${meter.address.record || ''} ${meter.address.block || ''} ${meter.address.property || ''}`,
-                'القراءة الجديدة': reading.newReading,
-                'الفرق': reading.newReading !== null ? (reading.newReading - (meter.previousReading || 0)) : '',
-                'سبب التخطي': reading.skipReason || '',
-                'تاريخ القراءة': reading.createdAt ? new Date(reading.createdAt).toLocaleDateString('ar-IQ') + ' ' + new Date(reading.createdAt).toLocaleTimeString('ar-IQ') : '',
-                'خط العرض': reading.latitude || '',
-                'خط الطول': reading.longitude || '',
-                'الملاحظات': reading.notes || '',
+                "رقم الحساب": meter.accountNumber,
+                "اسم المشترك": meter.subscriberName,
+                الصنف: meter.category,
+                العنوان: `${meter.address.record || ""} ${meter.address.block || ""} ${meter.address.property || ""}`,
+                "القراءة الجديدة": reading.newReading,
+                الفرق:
+                  reading.newReading !== null
+                    ? reading.newReading - (meter.previousReading || 0)
+                    : "",
+                "سبب التخطي": reading.skipReason || "",
+                "تاريخ القراءة": reading.createdAt
+                  ? new Date(reading.createdAt).toLocaleDateString("ar-IQ") +
+                    " " +
+                    new Date(reading.createdAt).toLocaleTimeString("ar-IQ")
+                  : "",
+                "خط العرض": reading.latitude || "",
+                "خط الطول": reading.longitude || "",
+                الملاحظات: reading.notes || "",
+                "اسم ملف الصورة": reading.photoPath || "",
               });
             });
           }
         });
-        
+
         if (allReadings.length > 0) {
           const readingsSheet = XLSX.utils.json_to_sheet(allReadings);
-          XLSX.utils.book_append_sheet(workbook, readingsSheet, 'القراءات');
+          XLSX.utils.book_append_sheet(workbook, readingsSheet, "القراءات");
         }
       }
-      
+
       // Generate Excel file
-      const excelBuffer = XLSX.write(workbook, { type: 'array', bookType: 'xlsx' });
-      
-      // Convert to base64 string properly
-      const uint8Array = new Uint8Array(excelBuffer);
-      let binaryString = '';
-      for (let i = 0; i < uint8Array.length; i++) {
-        binaryString += String.fromCharCode(uint8Array[i]);
-      }
-      const base64String = btoa(binaryString);
-      
+      const base64String = XLSX.write(workbook, {
+        type: "base64",
+        bookType: "xlsx",
+      });
+
       // Save to file
-      const fileName = `meter_readings_${new Date().toISOString().split('T')[0]}.xlsx`;
+      const fileName = `meter_readings_${new Date().toISOString().split("T")[0]}.xlsx`;
+
+      // Use legacy API with any cast
+      const fs = ExpoFileSystem as any;
+      const docDir = fs.documentDirectory;
       
-      // Access document directory using legacy API
-      const docDir = (FileSystem as any).documentDirectory;
       if (!docDir) {
         throw new Error("Could not access document directory");
       }
-      
+
       const fileUri = `${docDir}${fileName}`;
-      await (FileSystem as any).writeAsStringAsync(fileUri, base64String, {
-        encoding: 'base64',
+      await fs.writeAsStringAsync(fileUri, base64String, {
+        encoding: "base64",
       });
-      
       const canShare = await Sharing.isAvailableAsync();
       if (canShare) {
         await Sharing.shareAsync(fileUri, {
-          mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          mimeType:
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
           dialogTitle: "تصدير القراءات بصيغة Excel",
         });
-        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        await Haptics.notificationAsync(
+          Haptics.NotificationFeedbackType.Success,
+        );
       } else {
         Alert.alert("تم التصدير", `تم حفظ ملف Excel: ${fileName}`);
       }
@@ -281,7 +336,12 @@ export default function SettingsScreen() {
       ]}
       showsVerticalScrollIndicator={false}
     >
-      <View style={[styles.profileCard, { backgroundColor: theme.backgroundDefault }]}>
+      <View
+        style={[
+          styles.profileCard,
+          { backgroundColor: theme.backgroundDefault },
+        ]}
+      >
         <Image
           source={require("../../assets/images/avatar-reader.png")}
           style={styles.avatar}
@@ -291,37 +351,58 @@ export default function SettingsScreen() {
           <ThemedText type="h3" style={styles.profileName}>
             {readerProfile?.displayName || "قارئ المشتركين"}
           </ThemedText>
-          <ThemedText style={[styles.profileId, { color: theme.textSecondary }]}>
+          <ThemedText
+            style={[styles.profileId, { color: theme.textSecondary }]}
+          >
             {readerProfile?.username || "جاري التحميل..."}
           </ThemedText>
         </View>
       </View>
 
       {readerProfile ? (
-        <View style={[styles.statsCard, { backgroundColor: theme.backgroundDefault }]}>
+        <View
+          style={[
+            styles.statsCard,
+            { backgroundColor: theme.backgroundDefault },
+          ]}
+        >
           <View style={styles.statItem}>
-            <ThemedText style={[styles.statValue, { color: AppColors.primary }]}>
+            <ThemedText
+              style={[styles.statValue, { color: AppColors.primary }]}
+            >
               {readerProfile.stats.totalMeters}
             </ThemedText>
-            <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>
+            <ThemedText
+              style={[styles.statLabel, { color: theme.textSecondary }]}
+            >
               إجمالي المشتركين
             </ThemedText>
           </View>
-          <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
+          <View
+            style={[styles.statDivider, { backgroundColor: theme.border }]}
+          />
           <View style={styles.statItem}>
-            <ThemedText style={[styles.statValue, { color: AppColors.success }]}>
+            <ThemedText
+              style={[styles.statValue, { color: AppColors.success }]}
+            >
               {readerProfile.stats.completedMeters}
             </ThemedText>
-            <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>
+            <ThemedText
+              style={[styles.statLabel, { color: theme.textSecondary }]}
+            >
               تم قراءتها
             </ThemedText>
           </View>
-          <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
+          <View
+            style={[styles.statDivider, { backgroundColor: theme.border }]}
+          />
           <View style={styles.statItem}>
             <ThemedText style={[styles.statValue, { color: AppColors.accent }]}>
               {readerProfile.stats.totalReadings}
             </ThemedText>
-            <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>
+            <ThemedText
+              style={[styles.statLabel, { color: theme.textSecondary }]}
+            >
               القراءات المسجلة
             </ThemedText>
           </View>
@@ -329,10 +410,17 @@ export default function SettingsScreen() {
       ) : null}
 
       <View style={styles.section}>
-        <ThemedText style={[styles.sectionTitle, { color: theme.textSecondary }]}>
+        <ThemedText
+          style={[styles.sectionTitle, { color: theme.textSecondary }]}
+        >
           الإعدادات العامة
         </ThemedText>
-        <View style={[styles.sectionContent, { backgroundColor: theme.backgroundDefault }]}>
+        <View
+          style={[
+            styles.sectionContent,
+            { backgroundColor: theme.backgroundDefault },
+          ]}
+        >
           <SettingsItem
             icon="bell"
             title="الإشعارات"
@@ -348,10 +436,17 @@ export default function SettingsScreen() {
       </View>
 
       <View style={styles.section}>
-        <ThemedText style={[styles.sectionTitle, { color: theme.textSecondary }]}>
+        <ThemedText
+          style={[styles.sectionTitle, { color: theme.textSecondary }]}
+        >
           البيانات
         </ThemedText>
-        <View style={[styles.sectionContent, { backgroundColor: theme.backgroundDefault }]}>
+        <View
+          style={[
+            styles.sectionContent,
+            { backgroundColor: theme.backgroundDefault },
+          ]}
+        >
           <SettingsItem
             icon="download"
             title={isExporting ? "جاري التصدير..." : "تصدير القراءات"}
@@ -368,17 +463,25 @@ export default function SettingsScreen() {
           <View style={[styles.divider, { backgroundColor: theme.border }]} />
           <SettingsItem
             icon="refresh-cw"
-            title="مزامنة البيانات"
-            subtitle="آخر مزامنة: الآن"
+            title={isSyncing ? "جاري المزامنة..." : "مزامنة البيانات"}
+            subtitle={isSyncing ? "يرجى الانتظار" : "اضغط للمزامنة يدوياً"}
+            onPress={handleSync}
           />
         </View>
       </View>
 
       <View style={styles.section}>
-        <ThemedText style={[styles.sectionTitle, { color: theme.textSecondary }]}>
+        <ThemedText
+          style={[styles.sectionTitle, { color: theme.textSecondary }]}
+        >
           حول التطبيق
         </ThemedText>
-        <View style={[styles.sectionContent, { backgroundColor: theme.backgroundDefault }]}>
+        <View
+          style={[
+            styles.sectionContent,
+            { backgroundColor: theme.backgroundDefault },
+          ]}
+        >
           <SettingsItem
             icon="info"
             title="الإصدار"
@@ -386,10 +489,7 @@ export default function SettingsScreen() {
             showArrow={false}
           />
           <View style={[styles.divider, { backgroundColor: theme.border }]} />
-          <SettingsItem
-            icon="help-circle"
-            title="المساعدة والدعم"
-          />
+          <SettingsItem icon="help-circle" title="المساعدة والدعم" />
         </View>
       </View>
 

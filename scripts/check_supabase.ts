@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.EXPO_PUBLIC_SUPABASE_KEY;
+const supabaseKey = process.env.EXPO_PUBLIC_SUPABASE_KEY;
 
 if (!supabaseUrl || !supabaseKey) {
     console.error('Missing Supabase credentials');
@@ -25,7 +25,7 @@ async function checkStorage() {
     
     console.log('Available buckets:', buckets.map(b => b.name));
     
-    const photosBucket = buckets.find(b => b.name === 'photos');
+    const photosBucket = buckets.find(b => b.name === 'PHOTOS' || b.name === 'photos');
     if (!photosBucket) {
         console.log('❌ "photos" bucket not found! Creating it...');
         const { data, error: createError } = await supabase.storage.createBucket('photos', {

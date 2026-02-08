@@ -166,11 +166,16 @@ export const getMetersFromLocalDB = (readerId: string): any[] => {
       `SELECT m.*, r.id as r_id, r.newReading as r_newReading, r.photoUri as r_photoUri, 
               r.photoFileName as r_photoFileName, r.notes as r_notes,
               r.skipReason as r_skipReason, r.createdAt as r_createdAt,
-              r.latitude as r_latitude, r.longitude as r_longitude
+              r.latitude as r_latitude, r.longitude as r_longitude,
+              r.synced as r_synced
        FROM meters m
-       LEFT JOIN readings r ON m.id = r.meterId
+       LEFT JOIN readings r ON r.id = (
+         SELECT id FROM readings 
+         WHERE meterId = m.id 
+         ORDER BY createdAt DESC 
+         LIMIT 1
+       )
        WHERE m.readerId = ?
-       GROUP BY m.id
        ORDER BY m.sequence`,
       [readerId]
     ) as any[];
@@ -178,7 +183,7 @@ export const getMetersFromLocalDB = (readerId: string): any[] => {
     return rows.map(row => {
       const { 
         r_id, r_newReading, r_photoUri, r_photoFileName, r_notes, 
-        r_skipReason, r_createdAt, r_latitude, r_longitude,
+        r_skipReason, r_createdAt, r_latitude, r_longitude, r_synced,
         ...meter 
       } = row;
       
@@ -196,7 +201,8 @@ export const getMetersFromLocalDB = (readerId: string): any[] => {
           createdAt: r_createdAt,
           readingDate: r_createdAt,
           latitude: r_latitude,
-          longitude: r_longitude
+          longitude: r_longitude,
+          synced: r_synced === 1
         } : null
       };
     });
@@ -204,6 +210,52 @@ export const getMetersFromLocalDB = (readerId: string): any[] => {
     console.log('Error getting meters from local DB:', error);
     return [];
   }
+};
+
+// Get formatted export data from local database
+export const getExportDataFromLocalDB = (readerId: string) => {
+  const meters = getMetersFromLocalDB(readerId);
+  
+  return {
+    exportDate: new Date().toISOString(),
+    readerId,
+    totalMeters: meters.length,
+    completedReadings: meters.filter(m => m.latestReading !== null).length,
+    meters: meters.filter(m => m.latestReading !== null).map(meter => {
+      const readingsArray = [];
+      if (meter.latestReading) {
+        readingsArray.push({
+          newReading: meter.latestReading.newReading,
+          photoPath: meter.latestReading.photoPath,
+          localPhotoUri: meter.latestReading.localPhotoUri,
+          notes: meter.latestReading.notes,
+          skipReason: meter.latestReading.skipReason,
+          createdAt: meter.latestReading.createdAt,
+        });
+      }
+      
+      return {
+        accountNumber: meter.accountNumber,
+        sequence: meter.sequence,
+        meterNumber: meter.meterNumber,
+        category: meter.category,
+        subscriberName: meter.subscriberName,
+        address: {
+          record: meter.record,
+          block: meter.block,
+          property: meter.property,
+        },
+        previousReading: meter.previousReading,
+        previousReadingDate: meter.previousReadingDate,
+        amounts: {
+          currentAmount: meter.currentAmount,
+          debts: meter.debts,
+          totalAmount: meter.totalAmount,
+        },
+        readings: readingsArray,
+      };
+    }),
+  };
 };
 
 // Clear local database (for testing purposes)

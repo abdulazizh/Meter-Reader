@@ -1,18 +1,21 @@
 import type { Express } from "express";
 import { createServer, type Server } from "node:http";
+import * as fs from "fs";
+import * as path from "path";
+import { fileURLToPath } from "url";
 import { storage } from "./storage";
 import type { InsertMeter } from "@shared/schema";
-import { createClient } from "@supabase/supabase-js";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
-  const supabaseKey = process.env.EXPO_PUBLIC_SUPABASE_KEY;
-
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error("Missing Supabase credentials in environment variables");
+  // Define __dirname equivalent for ES modules
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
+  
+  // Ensure uploads directory exists
+  const uploadsDir = path.join(__dirname, "uploads");
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
   }
-
-  const supabase = createClient(supabaseUrl, supabaseKey);
 
   app.post("/api/login", async (req, res) => {
     try {
@@ -109,6 +112,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Missing reading value" });
       }
 
+      console.log("Received reading sync request for meter:", meterId);
+      console.log(`Syncing reading for meter ${meterId}, newReading: ${newReading}`);
       const reading = await storage.createReading({
         meterId,
         readerId,
@@ -118,7 +123,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         skipReason: null,
       });
 
-      await storage.updateMeterAfterReading(meterId, parseInt(newReading, 10));
+      console.log(`Reading created with ID ${reading.id}. NO meter update should follow.`);
+      // await storage.updateMeterAfterReading(meterId, parseInt(newReading, 10));
 
       res.status(201).json(reading);
     } catch (error) {
@@ -346,31 +352,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/upload-photo", async (req, res) => {
     try {
       const { photoBase64, fileName } = req.body;
-
+      console.log(`Incoming photo upload for file: ${fileName}`);
+  
       if (!photoBase64 || !fileName) {
+        console.error("Missing photo data or filename");
         return res.status(400).json({ error: "Missing photo data or filename" });
       }
-
-      const base64Data = photoBase64.replace(/^data:image\/\w+;base64,/, '');
-      const buffer = Buffer.from(base64Data, 'base64');
-
-      const photoPath = `${fileName}`;
-
-      const { data, error } = await supabase.storage
-        .from('PHOTOS')
-        .upload(photoPath, buffer, {
-          contentType: 'image/jpeg',
-          upsert: true
-        });
-
-      if (error) {
-        console.error("Upload error:", error);
-        return res.status(500).json({ error: "Failed to upload photo to Supabase" });
+  
+      const base64Data = photoBase64.replace(/^data:image\/\w+;base64,/, "");
+      const buffer = Buffer.from(base64Data, "base64");
+  
+      const uploadsDir = path.join(process.cwd(), "server", "uploads");
+      console.log(`Saving photo to: ${uploadsDir}`);
+      
+      // Ensure the directory exists
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
       }
 
+      const photoPath = path.join(uploadsDir, fileName);
+      
+      // Write the image buffer to the file system
+      fs.writeFileSync(photoPath, buffer);
+      console.log("Photo written to disk successfully");
+  
       res.json({
         success: true,
-        photoPath: data.path,
+        photoPath: fileName, // Return just the filename since it's stored locally
         message: "Photo uploaded successfully"
       });
     } catch (error) {
@@ -378,23 +386,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Failed to upload photo" });
     }
   });
-
-  app.get("/api/photo/:path(*)", async (req, res) => {
+  
+  app.get("/api/photo/:path(*)", (req, res) => {
     try {
       const photoPath = req.params.path;
-
-      const { data, error } = await supabase.storage
-        .from('PHOTOS')
-        .download(photoPath);
-
-      if (error || !data) {
-        console.error("Download error:", error);
+      const fullPath = path.join(__dirname, "uploads", photoPath);
+  
+      // Check if file exists
+      if (!fs.existsSync(fullPath)) {
         return res.status(404).json({ error: "Photo not found" });
       }
-
-      const buffer = Buffer.from(await data.arrayBuffer());
-      res.setHeader('Content-Type', 'image/jpeg');
-      res.send(buffer);
+  
+      // Serve the image file
+      const imageData = fs.readFileSync(fullPath);
+      const ext = path.extname(fullPath).toLowerCase();
+        
+      // Set appropriate content type based on file extension
+      let contentType = "image/jpeg"; // default
+      if (ext === ".png") contentType = "image/png";
+      else if (ext === ".gif") contentType = "image/gif";
+      else if (ext === ".webp") contentType = "image/webp";
+        
+      res.setHeader("Content-Type", contentType);
+      res.send(imageData);
     } catch (error) {
       console.error("Error fetching photo:", error);
       res.status(500).json({ error: "Failed to fetch photo" });

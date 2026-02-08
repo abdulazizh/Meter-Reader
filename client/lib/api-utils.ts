@@ -1,16 +1,19 @@
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import { getApiUrl } from "./query-client";
 
-// Enable photo upload to server
 export const uploadPhotoToServer = async (uri: string, fileName: string): Promise<string | null> => {
   if (!uri) return null;
   
   try {
+    console.log(`Reading photo from URI: ${uri}`);
     const base64 = await FileSystem.readAsStringAsync(uri, {
-      encoding: "base64",
+      encoding: FileSystem.EncodingType.Base64,
     });
 
-    const response = await fetch(`${getApiUrl()}/api/upload-photo`, {
+    const baseUrl = getApiUrl();
+    const uploadUrl = `${baseUrl}${baseUrl.endsWith('/') ? '' : '/'}api/upload-photo`;
+    console.log(`Uploading to ${uploadUrl}...`);
+    const response = await fetch(uploadUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -22,13 +25,15 @@ export const uploadPhotoToServer = async (uri: string, fileName: string): Promis
     });
 
     if (!response.ok) {
-      throw new Error('Upload failed');
+      const errorText = await response.text();
+      console.error(`Upload failed with status ${response.status}: ${errorText}`);
+      throw new Error(`Upload failed: ${response.status}`);
     }
 
     const data = await response.json();
     return data.photoPath || fileName;
   } catch (error) {
     console.error('Error uploading photo:', error);
-    return null;
+    throw error;
   }
 };

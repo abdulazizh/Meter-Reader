@@ -20,7 +20,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import * as Location from "expo-location";
 import * as MediaLibrary from "expo-media-library";
-import * as FileSystem from "expo-file-system";
+import * as ExpoFileSystem from "expo-file-system/legacy";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import Animated, {
   FadeIn,
@@ -33,7 +33,13 @@ import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollV
 import { ThemedText } from "@/components/ThemedText";
 import { Button } from "@/components/Button";
 import { useTheme } from "@/hooks/useTheme";
-import { Spacing, BorderRadius, AppColors, Shadows, Typography } from "@/constants/theme";
+import {
+  Spacing,
+  BorderRadius,
+  AppColors,
+  Shadows,
+  Typography,
+} from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { apiRequest, getApiUrl } from "@/lib/query-client";
 import { saveReadingToLocalDB } from "@/lib/local-db";
@@ -53,7 +59,8 @@ export default function ReadingEntryScreen() {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const route = useRoute<RouteProp<RootStackParamList, "ReadingEntry">>();
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const navigation =
+    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const queryClient = useQueryClient();
   const { meter, allMeters, currentIndex } = route.params;
 
@@ -66,26 +73,36 @@ export default function ReadingEntryScreen() {
   const [otherReason, setOtherReason] = useState("");
 
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
-  const [mediaLibraryPermission, requestMediaLibraryPermission] = MediaLibrary.usePermissions();
+  const [mediaLibraryPermission, requestMediaLibraryPermission] =
+    MediaLibrary.usePermissions();
   const [isSaving, setIsSaving] = useState(false);
 
   // Initialize form with existing reading data if available
   React.useEffect(() => {
     if (meter.latestReading) {
-      if (meter.latestReading.newReading !== null && meter.latestReading.newReading !== undefined) {
+      if (
+        meter.latestReading.newReading !== null &&
+        meter.latestReading.newReading !== undefined
+      ) {
         setNewReading(meter.latestReading.newReading.toString());
       }
       if (meter.latestReading.notes) {
         setNotes(meter.latestReading.notes);
       }
-      
+
       // Handle photo display
       if (meter.latestReading.localPhotoUri) {
-        console.log("Loading local photo URI:", meter.latestReading.localPhotoUri);
+        console.log(
+          "Loading local photo URI:",
+          meter.latestReading.localPhotoUri,
+        );
         setPhotoUri(meter.latestReading.localPhotoUri);
+      } else if (meter.latestReading.localPhotoUri) {
+         console.log("Loading local photo URI:", meter.latestReading.localPhotoUri);
+         setPhotoUri(meter.latestReading.localPhotoUri);
       } else if (meter.latestReading.photoPath) {
         const baseUrl = getApiUrl();
-        const photoUrl = `${baseUrl.replace(/\/$/, '')}/api/photo/${meter.latestReading.photoPath}`;
+        const photoUrl = `${baseUrl.replace(/\/$/, "")}/api/photo/${meter.latestReading.photoPath}`;
         console.log("Loading server photo URL:", photoUrl);
         setPhotoUri(photoUrl);
       }
@@ -94,7 +111,8 @@ export default function ReadingEntryScreen() {
 
   const hasPrevious = currentIndex > 0;
   const hasNext = currentIndex < allMeters.length - 1;
-  const isCompleted = meter.latestReading !== null && meter.latestReading !== undefined;
+  const isCompleted =
+    meter.latestReading !== null && meter.latestReading !== undefined;
 
   const buttonScale = useSharedValue(1);
 
@@ -103,7 +121,13 @@ export default function ReadingEntryScreen() {
   }));
 
   const mutation = useMutation({
-    mutationFn: async (data: { newReading: number; photoPath?: string; notes?: string; latitude?: number; longitude?: number }) => {
+    mutationFn: async (data: {
+      newReading: number;
+      photoPath?: string;
+      notes?: string;
+      latitude?: number;
+      longitude?: number;
+    }) => {
       const response = await apiRequest("POST", "/api/readings", {
         meterId: meter.id,
         readerId: meter.readerId,
@@ -133,7 +157,11 @@ export default function ReadingEntryScreen() {
   });
 
   const skipMutation = useMutation({
-    mutationFn: async (data: { skipReason: string; latitude?: number; longitude?: number }) => {
+    mutationFn: async (data: {
+      skipReason: string;
+      latitude?: number;
+      longitude?: number;
+    }) => {
       const response = await apiRequest("POST", "/api/readings", {
         meterId: meter.id,
         readerId: meter.readerId,
@@ -202,7 +230,10 @@ export default function ReadingEntryScreen() {
   };
 
   const handleSkipWithReason = async (reason: string) => {
-    const reasonLabel = reason === "other" ? otherReason : SKIP_REASONS.find(r => r.id === reason)?.label || reason;
+    const reasonLabel =
+      reason === "other"
+        ? otherReason
+        : SKIP_REASONS.find((r) => r.id === reason)?.label || reason;
     if (reason === "other" && !otherReason.trim()) {
       Alert.alert("تنبيه", "يرجى إدخال السبب");
       return;
@@ -236,41 +267,46 @@ export default function ReadingEntryScreen() {
       undefined,
       reasonLabel,
       latitude,
-      longitude
+      longitude,
     );
 
     if (savedLocally) {
       // Optimistic update
-      queryClient.setQueryData(['/api/meters', meter.readerId], (oldData: any) => {
-        if (oldData && Array.isArray(oldData)) {
-          return oldData.map((m: any) => 
-            m.id === meter.id 
-              ? { 
-                  ...m, 
-                  latestReading: {
-                    id: readingId,
-                    newReading: null,
-                    createdAt: new Date().toISOString(),
-                    readingDate: new Date().toISOString(),
-                    meterId: meter.id,
-                    readerId: meter.readerId,
-                    photoPath: null,
-                    notes: null,
-                    skipReason: reasonLabel,
-                    isCompleted: true,
-                    latitude: latitude?.toString() || null,
-                    longitude: longitude?.toString() || null
+      queryClient.setQueryData(
+        ["/api/meters", meter.readerId],
+        (oldData: any) => {
+          if (oldData && Array.isArray(oldData)) {
+            return oldData.map((m: any) =>
+              m.id === meter.id
+                ? {
+                    ...m,
+                    latestReading: {
+                      id: readingId,
+                      newReading: null,
+                      createdAt: new Date().toISOString(),
+                      readingDate: new Date().toISOString(),
+                      meterId: meter.id,
+                      readerId: meter.readerId,
+                      photoPath: null,
+                      notes: null,
+                      skipReason: reasonLabel,
+                      isCompleted: true,
+                      latitude: latitude?.toString() || null,
+                      longitude: longitude?.toString() || null,
+                    },
                   }
-                }
-              : m
-          );
-        }
-        return oldData;
-      });
+                : m,
+            );
+          }
+          return oldData;
+        },
+      );
 
-      Alert.alert("تم الحفظ محلياً", "تم حفظ سبب التخطي محلياً وسيتم مزامنته لاحقاً عند الضغط على زر المزامنة.", [
-        { text: "حسناً", onPress: () => goToNextMeter() }
-      ]);
+      Alert.alert(
+        "تم الحفظ محلياً",
+        "تم حفظ سبب التخطي محلياً وسيتم مزامنته لاحقاً عند الضغط على زر المزامنة.",
+        [{ text: "حسناً", onPress: () => goToNextMeter() }],
+      );
     } else {
       Alert.alert("خطأ", "فشل الحفظ محلياً.");
     }
@@ -279,14 +315,17 @@ export default function ReadingEntryScreen() {
   const formatDate = (date: Date | string) => {
     const d = new Date(date);
     const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
     return `${year}/${month}/${day}`;
   };
 
   const handleTakePhoto = async () => {
     if (!cameraPermission?.granted) {
-      if (cameraPermission?.status === "denied" && !cameraPermission?.canAskAgain) {
+      if (
+        cameraPermission?.status === "denied" &&
+        !cameraPermission?.canAskAgain
+      ) {
         if (Platform.OS !== "web") {
           Alert.alert(
             "صلاحية الكاميرا",
@@ -301,7 +340,7 @@ export default function ReadingEntryScreen() {
                   } catch (e) {}
                 },
               },
-            ]
+            ],
           );
         }
         return;
@@ -321,12 +360,17 @@ export default function ReadingEntryScreen() {
       if (photo) {
         setPhotoUri(photo.uri);
         setShowCamera(false);
-        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        await Haptics.notificationAsync(
+          Haptics.NotificationFeedbackType.Success,
+        );
       }
     }
   };
 
-  const savePhotoToGallery = async (uri: string, fileName: string): Promise<boolean> => {
+  const savePhotoToGallery = async (
+    uri: string,
+    fileName: string,
+  ): Promise<boolean> => {
     try {
       if (Platform.OS === "web") {
         return true;
@@ -340,26 +384,28 @@ export default function ReadingEntryScreen() {
         }
       }
 
+      // بما أننا نستخدم المسار الدائم الذي يحمل الاسم الصحيح، لا داعي لإنشاء نسخة مؤقتة
       // حفظ الصورة في معرض الجهاز
       const asset = await MediaLibrary.createAssetAsync(uri);
-      
+
       const albumName = "قراءات الكهرباء";
       let album = await MediaLibrary.getAlbumAsync(albumName);
-      
+
       if (!album) {
         await MediaLibrary.createAlbumAsync(albumName, asset, false);
       } else {
         await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
       }
-      
-      console.log(`Photo saved to album '${albumName}'. Reference name: ${fileName}`);
+
+      console.log(
+        `Photo saved to album '${albumName}' with name: ${fileName}`,
+      );
       return true;
     } catch (error) {
       console.error("Error saving photo to gallery:", error);
       return false;
     }
   };
-
 
   const handleSave = async () => {
     if (!newReading.trim()) {
@@ -391,11 +437,11 @@ export default function ReadingEntryScreen() {
 
     const timestamp = Date.now();
     // Ensure filename is safe and properly formatted
-    const safeAccountNumber = meter.accountNumber.replace(/[^a-zA-Z0-9]/g, '_');
-    const safeSequence = meter.sequence.replace(/[^a-zA-Z0-9]/g, '_');
+    const safeAccountNumber = meter.accountNumber.replace(/[^a-zA-Z0-9]/g, "_");
+    const safeSequence = meter.sequence.replace(/[^a-zA-Z0-9]/g, "_");
     const photoFileName = `${safeAccountNumber}_${safeSequence}_${timestamp}.jpg`;
-    
-    console.log('Generated photo filename:', photoFileName);
+
+    console.log("Generated photo filename:", photoFileName);
 
     let latitude: number | undefined;
     let longitude: number | undefined;
@@ -413,11 +459,41 @@ export default function ReadingEntryScreen() {
       console.log("Could not get location:", error);
     }
 
-    // حفظ الصورة في معرض الجهاز فقط - بدون رفع للخادم
-    if (photoUri) {
-      await savePhotoToGallery(photoUri, photoFileName);
+    // حفظ الصورة في مسار دائم داخل التطبيق أولاً (لضمان وجود اسم الملف الصحيح)
+    let permanentPhotoUri = photoUri;
+    try {
+      if (photoUri) {
+        // Use legacy API with any cast to avoid TS errors if types are missing
+        const fs = ExpoFileSystem as any;
+        const photosDir = `${fs.documentDirectory}photos/`;
+        
+        const dirInfo = await fs.getInfoAsync(photosDir);
+        if (!dirInfo.exists) {
+          await fs.makeDirectoryAsync(photosDir, { intermediates: true });
+        }
+        
+        const newPath = `${photosDir}${photoFileName}`;
+        
+        await fs.copyAsync({
+          from: photoUri,
+          to: newPath
+        });
+        
+        permanentPhotoUri = newPath;
+        console.log("Photo saved to permanent storage:", permanentPhotoUri);
+
+        // الآن نحفظ الصورة في المعرض باستخدام المسار الدائم الذي يحمل الاسم المطلوب
+        // Save to Gallery using the PERMANENT file which has the correct name
+        await savePhotoToGallery(permanentPhotoUri, photoFileName);
+      }
+    } catch (error) {
+      console.log("Error saving photo:", error);
+      // Fallback: If permanent save fails, try to save original URI to gallery at least
+      if (photoUri) {
+         await savePhotoToGallery(photoUri, photoFileName);
+      }
     }
-    
+
     // حفظ القراءة محلياً في SQLite (strictly offline per user request)
     const readingId = Math.random().toString(36).substring(7);
     const savedLocally = await saveReadingToLocalDB(
@@ -425,12 +501,12 @@ export default function ReadingEntryScreen() {
       meter.id,
       meter.readerId,
       readingValue,
-      photoUri,
+      permanentPhotoUri,
       photoFileName,
       notes.trim() || undefined,
       undefined,
       latitude,
-      longitude
+      longitude,
     );
 
     if (!savedLocally) {
@@ -440,42 +516,47 @@ export default function ReadingEntryScreen() {
     }
 
     setIsSaving(false);
-    
+
     // تحديث حالة المتر محلياً ليعكس أنه تم قراءته
-    queryClient.setQueryData(['/api/meters', meter.readerId], (oldData: any) => {
-      if (oldData && Array.isArray(oldData)) {
-        return oldData.map((m: any) => 
-          m.id === meter.id 
-            ? { 
-                ...m, 
-                latestReading: {
-                  id: readingId,
-                  newReading: readingValue,
-                  createdAt: new Date().toISOString(),
-                  readingDate: new Date().toISOString(),
-                  meterId: meter.id,
-                  readerId: meter.readerId,
-                  photoPath: photoFileName,
-                  notes: notes.trim() || null,
-                  skipReason: null,
-                  isCompleted: true,
-                  latitude: latitude?.toString() || null,
-                  longitude: longitude?.toString() || null
+    queryClient.setQueryData(
+      ["/api/meters", meter.readerId],
+      (oldData: any) => {
+        if (oldData && Array.isArray(oldData)) {
+          return oldData.map((m: any) =>
+            m.id === meter.id
+              ? {
+                  ...m,
+                  latestReading: {
+                    id: readingId,
+                    newReading: readingValue,
+                    createdAt: new Date().toISOString(),
+                    readingDate: new Date().toISOString(),
+                    meterId: meter.id,
+                    readerId: meter.readerId,
+                    photoPath: photoFileName,
+                    notes: notes.trim() || null,
+                    skipReason: null,
+                    isCompleted: true,
+                    latitude: latitude?.toString() || null,
+                    longitude: longitude?.toString() || null,
+                  },
                 }
-              }
-            : m
-        );
-      }
-      return oldData;
-    });
-    
+              : m,
+          );
+        }
+        return oldData;
+      },
+    );
+
     // منع إعادة التحميل التلقائي للحفاظ على الحالة المحلية
-    queryClient.cancelQueries({ queryKey: ['/api/meters', meter.readerId] });
-    
+    queryClient.cancelQueries({ queryKey: ["/api/meters", meter.readerId] });
+
     // إظهار رسالة تؤكد الحفظ المحلي والانتظار للمزامنة اليدوية
-    Alert.alert("تم الحفظ محلياً", "تم حفظ القراءة والصورة محلياً بنجاح.\nيرجى المزامنة يدوياً من قائمة المشتركين عند توفر الإنترنت.", [
-      { text: "حسناً", onPress: () => goToNextMeter() }
-    ]);
+    Alert.alert(
+      "تم الحفظ محلياً",
+      "تم حفظ القراءة والصورة محلياً بنجاح.\nيرجى المزامنة يدوياً من قائمة المشتركين عند توفر الإنترنت.",
+      [{ text: "حسناً", onPress: () => goToNextMeter() }],
+    );
   };
 
   const canSave = newReading.trim().length > 0 && photoUri !== null;
@@ -499,10 +580,7 @@ export default function ReadingEntryScreen() {
             </Pressable>
           </View>
           <View style={styles.cameraFooter}>
-            <Pressable
-              onPress={handleCapture}
-              style={styles.captureButton}
-            >
+            <Pressable onPress={handleCapture} style={styles.captureButton}>
               <View style={styles.captureButtonInner} />
             </Pressable>
           </View>
@@ -521,7 +599,12 @@ export default function ReadingEntryScreen() {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={[styles.subscriberHeader, { backgroundColor: AppColors.primary }]}>
+        <View
+          style={[
+            styles.subscriberHeader,
+            { backgroundColor: AppColors.primary },
+          ]}
+        >
           <ThemedText style={styles.subscriberName}>
             {meter.subscriberName}
           </ThemedText>
@@ -530,18 +613,25 @@ export default function ReadingEntryScreen() {
           </ThemedText>
         </View>
 
-        <View style={[styles.meterInfoCard, { backgroundColor: theme.backgroundSecondary }]}>
+        <View
+          style={[
+            styles.meterInfoCard,
+            { backgroundColor: theme.backgroundSecondary },
+          ]}
+        >
           <View style={styles.infoRow}>
             <View style={styles.infoItem}>
-              <ThemedText style={[styles.infoLabel, { color: theme.textSecondary }]}>
+              <ThemedText
+                style={[styles.infoLabel, { color: theme.textSecondary }]}
+              >
                 الصنف
               </ThemedText>
-              <ThemedText style={styles.infoValue}>
-                {meter.category}
-              </ThemedText>
+              <ThemedText style={styles.infoValue}>{meter.category}</ThemedText>
             </View>
             <View style={styles.infoItem}>
-              <ThemedText style={[styles.infoLabel, { color: theme.textSecondary }]}>
+              <ThemedText
+                style={[styles.infoLabel, { color: theme.textSecondary }]}
+              >
                 رقم المقياس
               </ThemedText>
               <ThemedText style={styles.infoValue}>
@@ -551,36 +641,128 @@ export default function ReadingEntryScreen() {
           </View>
 
           <View style={styles.addressSection}>
-            <ThemedText style={[styles.addressLabel, { color: theme.textSecondary }]}>
+            <ThemedText
+              style={[styles.addressLabel, { color: theme.textSecondary }]}
+            >
               العنوان
             </ThemedText>
             <View style={styles.addressRow}>
               <View style={styles.addressItem}>
-                <ThemedText style={[styles.addressItemLabel, { color: theme.textSecondary }]}>سجل</ThemedText>
-                <ThemedText style={styles.addressItemValue}>{meter.record}</ThemedText>
+                <ThemedText
+                  style={[
+                    styles.addressItemLabel,
+                    { color: theme.textSecondary },
+                  ]}
+                >
+                  سجل
+                </ThemedText>
+                <ThemedText style={styles.addressItemValue}>
+                  {meter.record}
+                </ThemedText>
               </View>
               <View style={styles.addressItem}>
-                <ThemedText style={[styles.addressItemLabel, { color: theme.textSecondary }]}>بلوك</ThemedText>
-                <ThemedText style={styles.addressItemValue}>{meter.block}</ThemedText>
+                <ThemedText
+                  style={[
+                    styles.addressItemLabel,
+                    { color: theme.textSecondary },
+                  ]}
+                >
+                  بلوك
+                </ThemedText>
+                <ThemedText style={styles.addressItemValue}>
+                  {meter.block}
+                </ThemedText>
               </View>
               <View style={styles.addressItem}>
-                <ThemedText style={[styles.addressItemLabel, { color: theme.textSecondary }]}>عقار</ThemedText>
-                <ThemedText style={styles.addressItemValue}>{meter.property}</ThemedText>
+                <ThemedText
+                  style={[
+                    styles.addressItemLabel,
+                    { color: theme.textSecondary },
+                  ]}
+                >
+                  عقار
+                </ThemedText>
+                <ThemedText style={styles.addressItemValue}>
+                  {meter.property}
+                </ThemedText>
               </View>
             </View>
           </View>
 
-          <View style={[styles.previousReadingSection, { borderTopColor: theme.border }]}>
+          <View
+            style={[
+              styles.financialCard,
+              { backgroundColor: theme.backgroundSecondary },
+            ]}
+          >
+            <ThemedText style={styles.financialTitle}>
+              المبالغ المستحقة
+            </ThemedText>
+            <View style={styles.financialRow}>
+              <View style={styles.financialItem}>
+                <ThemedText
+                  style={[
+                    styles.financialLabel,
+                    { color: theme.textSecondary },
+                  ]}
+                >
+                  المبلغ الحالي
+                </ThemedText>
+                <ThemedText style={styles.financialValue}>
+                  {Number(meter.currentAmount).toLocaleString("ar-IQ")} د.ع
+                </ThemedText>
+              </View>
+              <View style={styles.financialItem}>
+                <ThemedText
+                  style={[
+                    styles.financialLabel,
+                    { color: theme.textSecondary },
+                  ]}
+                >
+                  الديون
+                </ThemedText>
+                <ThemedText
+                  style={[styles.financialValue, { color: AppColors.error }]}
+                >
+                  {Number(meter.debts).toLocaleString("ar-IQ")} د.ع
+                </ThemedText>
+              </View>
+            </View>
+            <View style={[styles.totalRow, { borderTopColor: theme.border }]}>
+              <ThemedText style={styles.totalLabel}>المجموع</ThemedText>
+              <ThemedText
+                style={[styles.totalValue, { color: AppColors.primary }]}
+              >
+                {Number(meter.totalAmount).toLocaleString("ar-IQ")} د.ع
+              </ThemedText>
+            </View>
+          </View>
+
+          <View
+            style={[
+              styles.previousReadingSection,
+              { borderTopColor: theme.border },
+            ]}
+          >
             <View style={styles.previousReadingInfo}>
-              <ThemedText style={[styles.infoLabel, { color: theme.textSecondary }]}>
+              <ThemedText
+                style={[styles.infoLabel, { color: theme.textSecondary }]}
+              >
                 القراءة السابقة
               </ThemedText>
-              <ThemedText style={[styles.previousReadingValue, { color: AppColors.primary }]}>
+              <ThemedText
+                style={[
+                  styles.previousReadingValue,
+                  { color: AppColors.primary },
+                ]}
+              >
                 {meter.previousReading.toLocaleString("ar-IQ")}
               </ThemedText>
             </View>
             <View style={styles.previousReadingInfo}>
-              <ThemedText style={[styles.infoLabel, { color: theme.textSecondary }]}>
+              <ThemedText
+                style={[styles.infoLabel, { color: theme.textSecondary }]}
+              >
                 التاريخ
               </ThemedText>
               <ThemedText style={styles.previousReadingDate}>
@@ -590,40 +772,20 @@ export default function ReadingEntryScreen() {
           </View>
         </View>
 
-        <View style={[styles.financialCard, { backgroundColor: theme.backgroundSecondary }]}>
-          <ThemedText style={styles.financialTitle}>المبالغ المستحقة</ThemedText>
-          <View style={styles.financialRow}>
-            <View style={styles.financialItem}>
-              <ThemedText style={[styles.financialLabel, { color: theme.textSecondary }]}>
-                المبلغ الحالي
-              </ThemedText>
-              <ThemedText style={styles.financialValue}>
-                {Number(meter.currentAmount).toLocaleString("ar-IQ")} د.ع
-              </ThemedText>
-            </View>
-            <View style={styles.financialItem}>
-              <ThemedText style={[styles.financialLabel, { color: theme.textSecondary }]}>
-                الديون
-              </ThemedText>
-              <ThemedText style={[styles.financialValue, { color: AppColors.error }]}>
-                {Number(meter.debts).toLocaleString("ar-IQ")} د.ع
-              </ThemedText>
-            </View>
-          </View>
-          <View style={[styles.totalRow, { borderTopColor: theme.border }]}>
-            <ThemedText style={styles.totalLabel}>المجموع</ThemedText>
-            <ThemedText style={[styles.totalValue, { color: AppColors.primary }]}>
-              {Number(meter.totalAmount).toLocaleString("ar-IQ")} د.ع
-            </ThemedText>
-          </View>
-        </View>
-
         <View style={styles.inputSection}>
           <ThemedText type="h4" style={styles.sectionTitle}>
             القراءة الجديدة
           </ThemedText>
 
-          <View style={[styles.inputContainer, { backgroundColor: theme.backgroundDefault, borderColor: theme.border }]}>
+          <View
+            style={[
+              styles.inputContainer,
+              {
+                backgroundColor: theme.backgroundDefault,
+                borderColor: theme.border,
+              },
+            ]}
+          >
             <Feather name="hash" size={20} color={theme.textSecondary} />
             <TextInput
               style={[styles.readingInput, { color: theme.text }]}
@@ -654,7 +816,10 @@ export default function ReadingEntryScreen() {
               />
               <Pressable
                 onPress={() => setPhotoUri(null)}
-                style={[styles.removePhotoButton, { backgroundColor: AppColors.error }]}
+                style={[
+                  styles.removePhotoButton,
+                  { backgroundColor: AppColors.error },
+                ]}
               >
                 <Feather name="x" size={20} color="#FFFFFF" />
               </Pressable>
@@ -664,13 +829,18 @@ export default function ReadingEntryScreen() {
               onPress={handleTakePhoto}
               style={[
                 styles.cameraButton,
-                { backgroundColor: theme.backgroundDefault, borderColor: AppColors.accent },
+                {
+                  backgroundColor: theme.backgroundDefault,
+                  borderColor: AppColors.accent,
+                },
                 animatedButtonStyle,
               ]}
               testID="button-take-photo"
             >
               <Feather name="camera" size={32} color={AppColors.accent} />
-              <ThemedText style={[styles.photoButtonText, { color: AppColors.accent }]}>
+              <ThemedText
+                style={[styles.photoButtonText, { color: AppColors.accent }]}
+              >
                 التقاط صورة
               </ThemedText>
             </AnimatedPressable>
@@ -682,7 +852,15 @@ export default function ReadingEntryScreen() {
             ملاحظات (اختياري)
           </ThemedText>
 
-          <View style={[styles.notesContainer, { backgroundColor: theme.backgroundDefault, borderColor: theme.border }]}>
+          <View
+            style={[
+              styles.notesContainer,
+              {
+                backgroundColor: theme.backgroundDefault,
+                borderColor: theme.border,
+              },
+            ]}
+          >
             <TextInput
               style={[styles.notesInput, { color: theme.text }]}
               placeholder="أضف ملاحظات إضافية..."
@@ -705,12 +883,12 @@ export default function ReadingEntryScreen() {
               styles.saveButton,
               {
                 backgroundColor: canSave ? AppColors.primary : theme.pending,
-                opacity: (mutation.isPending || isSaving) ? 0.7 : 1,
+                opacity: mutation.isPending || isSaving ? 0.7 : 1,
               },
             ]}
             testID="button-save"
           >
-            {(mutation.isPending || isSaving) ? (
+            {mutation.isPending || isSaving ? (
               <View style={styles.savingIndicator}>
                 <ActivityIndicator color="#FFFFFF" />
                 <ThemedText style={styles.saveButtonText}>
@@ -730,7 +908,9 @@ export default function ReadingEntryScreen() {
 
         <View style={styles.navigationSection}>
           <View style={styles.meterCounter}>
-            <ThemedText style={[styles.counterText, { color: theme.textSecondary }]}>
+            <ThemedText
+              style={[styles.counterText, { color: theme.textSecondary }]}
+            >
               {currentIndex + 1} / {allMeters.length}
             </ThemedText>
           </View>
@@ -760,12 +940,25 @@ export default function ReadingEntryScreen() {
               disabled={!hasPrevious}
               style={[
                 styles.navButton,
-                { backgroundColor: hasPrevious ? theme.backgroundSecondary : theme.pending },
+                {
+                  backgroundColor: hasPrevious
+                    ? theme.backgroundSecondary
+                    : theme.pending,
+                },
               ]}
               testID="button-previous"
             >
-              <Feather name="arrow-right" size={20} color={hasPrevious ? theme.text : theme.textSecondary} />
-              <ThemedText style={[styles.navButtonText, { color: hasPrevious ? theme.text : theme.textSecondary }]}>
+              <Feather
+                name="arrow-right"
+                size={20}
+                color={hasPrevious ? theme.text : theme.textSecondary}
+              />
+              <ThemedText
+                style={[
+                  styles.navButtonText,
+                  { color: hasPrevious ? theme.text : theme.textSecondary },
+                ]}
+              >
                 السابق
               </ThemedText>
             </Pressable>
@@ -780,32 +973,53 @@ export default function ReadingEntryScreen() {
         onRequestClose={() => setShowSkipModal(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: theme.backgroundDefault }]}>
+          <View
+            style={[
+              styles.modalContent,
+              { backgroundColor: theme.backgroundDefault },
+            ]}
+          >
             <View style={styles.modalHeader}>
               <ThemedText type="h3" style={styles.modalTitle}>
                 سبب عدم القراءة
               </ThemedText>
-              <Pressable onPress={() => setShowSkipModal(false)} style={styles.modalCloseButton}>
+              <Pressable
+                onPress={() => setShowSkipModal(false)}
+                style={styles.modalCloseButton}
+              >
                 <Feather name="x" size={24} color={theme.text} />
               </Pressable>
             </View>
-            <ThemedText style={[styles.modalSubtitle, { color: theme.textSecondary }]}>
+            <ThemedText
+              style={[styles.modalSubtitle, { color: theme.textSecondary }]}
+            >
               يرجى اختيار سبب عدم قراءة العداد
             </ThemedText>
-            
+
             <View style={styles.reasonsList}>
               {SKIP_REASONS.map((reason) => (
                 <Pressable
                   key={reason.id}
-                  onPress={() => reason.id !== "other" && handleSkipWithReason(reason.id)}
+                  onPress={() =>
+                    reason.id !== "other" && handleSkipWithReason(reason.id)
+                  }
                   style={[
                     styles.reasonButton,
-                    { backgroundColor: theme.backgroundSecondary, borderColor: theme.border },
+                    {
+                      backgroundColor: theme.backgroundSecondary,
+                      borderColor: theme.border,
+                    },
                   ]}
                 >
-                  <ThemedText style={styles.reasonText}>{reason.label}</ThemedText>
+                  <ThemedText style={styles.reasonText}>
+                    {reason.label}
+                  </ThemedText>
                   {reason.id !== "other" && (
-                    <Feather name="chevron-left" size={20} color={theme.textSecondary} />
+                    <Feather
+                      name="chevron-left"
+                      size={20}
+                      color={theme.textSecondary}
+                    />
                   )}
                 </Pressable>
               ))}
@@ -813,7 +1027,14 @@ export default function ReadingEntryScreen() {
 
             <View style={styles.otherReasonSection}>
               <TextInput
-                style={[styles.otherReasonInput, { backgroundColor: theme.backgroundSecondary, color: theme.text, borderColor: theme.border }]}
+                style={[
+                  styles.otherReasonInput,
+                  {
+                    backgroundColor: theme.backgroundSecondary,
+                    color: theme.text,
+                    borderColor: theme.border,
+                  },
+                ]}
                 placeholder="أو اكتب سبباً آخر..."
                 placeholderTextColor={theme.textSecondary}
                 value={otherReason}
@@ -822,7 +1043,10 @@ export default function ReadingEntryScreen() {
               {otherReason.trim().length > 0 ? (
                 <Pressable
                   onPress={() => handleSkipWithReason("other")}
-                  style={[styles.submitOtherButton, { backgroundColor: AppColors.accent }]}
+                  style={[
+                    styles.submitOtherButton,
+                    { backgroundColor: AppColors.accent },
+                  ]}
                 >
                   <ThemedText style={styles.submitOtherText}>إرسال</ThemedText>
                 </Pressable>
@@ -867,6 +1091,7 @@ const styles = StyleSheet.create({
     padding: Spacing.lg,
     borderRadius: BorderRadius.lg,
     marginBottom: Spacing.md,
+    textAlign: "left",
   },
   infoRow: {
     flexDirection: "row-reverse",
@@ -874,20 +1099,20 @@ const styles = StyleSheet.create({
   },
   infoItem: {
     flex: 1,
-    alignItems: "flex-end",
+    alignItems: "flex-start",
   },
   infoLabel: {
     fontSize: 12,
     fontFamily: "Cairo_400Regular",
     marginBottom: 4,
-    textAlign: "right",
-    writingDirection: "rtl",
+    textAlign: "left",
+    writingDirection: "ltr",
   },
   infoValue: {
     fontSize: 16,
     fontFamily: "Cairo_600SemiBold",
-    textAlign: "right",
-    writingDirection: "rtl",
+    textAlign: "left",
+    writingDirection: "ltr",
   },
   addressSection: {
     marginTop: Spacing.sm,
@@ -916,28 +1141,29 @@ const styles = StyleSheet.create({
     fontFamily: "Cairo_700Bold",
   },
   previousReadingSection: {
-    flexDirection: "row-reverse",
+    flexDirection: "row",
+    alignItems: "flex-start",
     borderTopWidth: 1,
     paddingTop: Spacing.md,
     marginTop: Spacing.sm,
   },
   previousReadingInfo: {
     flex: 1,
-    alignItems: "flex-end",
+    alignItems: "flex-start",
   },
   previousReadingValue: {
     fontSize: 22,
     fontFamily: "Cairo_700Bold",
     marginTop: 4,
-    textAlign: "right",
-    writingDirection: "rtl",
+    textAlign: "left",
+    writingDirection: "ltr",
   },
   previousReadingDate: {
     fontSize: 16,
     fontFamily: "Cairo_600SemiBold",
     marginTop: 4,
-    textAlign: "right",
-    writingDirection: "rtl",
+    textAlign: "left",
+    writingDirection: "ltr",
   },
   financialCard: {
     padding: Spacing.lg,
@@ -955,25 +1181,25 @@ const styles = StyleSheet.create({
   },
   financialItem: {
     flex: 1,
-    alignItems: "flex-end",
+    alignItems: "flex-start",
   },
   financialLabel: {
     fontSize: 12,
     fontFamily: "Cairo_400Regular",
     marginBottom: 2,
-    textAlign: "right",
-    writingDirection: "rtl",
+    textAlign: "left",
+    writingDirection: "ltr",
   },
   financialValue: {
     fontSize: 16,
     fontFamily: "Cairo_600SemiBold",
-    textAlign: "right",
-    writingDirection: "rtl",
+    textAlign: "left",
+    writingDirection: "ltr",
   },
   totalRow: {
-    flexDirection: "row-reverse",
+    flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
+    alignItems: "left",
     borderTopWidth: 1,
     paddingTop: Spacing.md,
   },

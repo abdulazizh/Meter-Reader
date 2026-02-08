@@ -13,6 +13,11 @@ export function getApiUrl(): string {
     host = "meter-reader-backend.onrender.com";
   }
 
+  // Check if host already includes protocol
+  if (host.startsWith('http://') || host.startsWith('https://')) {
+    return host;
+  }
+
   // Use http for localhost or IP addresses, otherwise https
   const protocol = host.includes("localhost") || /^\d+\.\d+\.\d+\.\d+/.test(host) ? "http" : "https";
   let url = new URL(`${protocol}://${host}`);

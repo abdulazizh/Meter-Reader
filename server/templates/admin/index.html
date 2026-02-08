@@ -708,8 +708,14 @@
     <div class="panel" id="readings-panel">
       <div class="panel-header">
         <h2 class="panel-title">القراءات المسجلة</h2>
+        <div class="actions">
+          <button class="btn btn-danger" onclick="deleteAllReadings()">
+            حذف الكل
+          </button>
+        </div>
       </div>
       <div class="filters-row">
+
         <div class="filter-group">
           <label>البحث</label>
           <input type="text" id="readings-search" placeholder="رقم الحساب أو الاسم..." oninput="filterReadings()">
@@ -1012,6 +1018,31 @@
     let meters = [];
     let allReadings = [];
     let importData = null;
+
+    async function deleteAllReadings() {
+      if (!confirm('هل أنت متأكد من حذف جميع القراءات؟ لا يمكن التراجع عن هذا الإجراء.')) {
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/admin/readings-all', {
+          method: 'DELETE'
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          showAlert('success', 'تم حذف جميع القراءات بنجاح');
+          loadReadings();
+          updateStats();
+        } else {
+          showAlert('error', 'فشل حذف القراءات: ' + (data.error || 'خطأ غير معروف'));
+        }
+      } catch (error) {
+        console.error('Error deleting readings:', error);
+        showAlert('error', 'حدث خطأ أثناء حذف القراءات');
+      }
+    }
 
     document.querySelectorAll('.tab').forEach(tab => {
       tab.addEventListener('click', () => {

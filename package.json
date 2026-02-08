@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "expo:dev": "cross-env EXPO_PUBLIC_DOMAIN=http://localhost:5000 npx expo start",
+    "expo:dev": "cross-env EXPO_PUBLIC_DOMAIN=localhost:5000 npx expo start",
     "server:dev": "cross-env NODE_ENV=development tsx --env-file=.env server/index.ts",
     "expo:start:static:build": "npx expo start --no-dev --minify --localhost",
     "expo:static:build": "node --env-file=.env scripts/build.cjs",
@@ -35,6 +35,7 @@
     "@tanstack/react-query": "^5.90.7",
     "@types/express-session": "^1.18.2",
     "cross-env": "^10.1.0",
+    "dotenv": "^17.2.4",
     "drizzle-kit": "^0.31.4",
     "drizzle-orm": "^0.39.3",
     "drizzle-zod": "^0.7.0",

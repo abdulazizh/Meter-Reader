@@ -379,6 +379,16 @@ export function registerAdminRoutes(app: Express) {
     }
   });
 
+  app.delete("/api/admin/readings-all", requireAdmin, async (req, res) => {
+    try {
+      await storage.deleteAllReadings();
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting all readings:", error);
+      res.status(500).json({ error: "Failed to delete all readings" });
+    }
+  });
+
   app.post("/api/admin/import/:type", requireAdmin, async (req, res) => {
     try {
       const { type } = req.params;
@@ -481,15 +491,18 @@ export function registerAdminRoutes(app: Express) {
       let count = 0;
       const readerIdsToUpdate = new Set<string>();
       if (type === "readers") {
+        const insertReaders = [];
         for (const item of jsonData) {
-          await storage.createReader({
+          insertReaders.push({
             username: item['اسم المستخدم'] || item['username'],
             password: item['كلمة المرور'] || item['password'] || "123456",
             displayName: item['الاسم الظاهر'] || item['displayName'] || item['username'] || item['اسم المستخدم'] || '',
           });
           count++;
         }
+        await storage.bulkCreateReaders(insertReaders);
       } else if (type === "meters") {
+        const insertMeters = [];
         for (const item of jsonData) {
           // Extract values with fallbacks
           const accountNumber = item['رقم الحساب'] || item['accountNumber'];
@@ -508,7 +521,8 @@ export function registerAdminRoutes(app: Express) {
           }
           
           const readerId = item['معرف القارئ'] || item['readerId'];
-          await storage.createMeter({
+          if (readerId) readerIdsToUpdate.add(readerId);
+          insertMeters.push({
             accountNumber: accountNumber,
             sequence: item['تسلسل'] || item['sequence'] || "001",
             meterNumber: meterNumber,
@@ -525,9 +539,9 @@ export function registerAdminRoutes(app: Express) {
             totalAmount: item['المجموع'] || item['totalAmount'] || "0",
             readerId: readerId && String(readerId).trim() !== "" ? String(readerId) : null,
           });
-          if (readerId) readerIdsToUpdate.add(readerId);
           count++;
         }
+        await storage.bulkCreateMeters(insertMeters);
       }
       
       // Increment versions for affected readers
@@ -564,15 +578,18 @@ export function registerAdminRoutes(app: Express) {
       const buffer = fs.readFileSync(req.file.path);
       const reader = new MDBReader(buffer);
       
-      // Get table data - default to 'output' for meters
-      let tableName = type === 'readers' ? 'readers' : 'output'; 
+      // Get table data - default to 'output' for meters, but also check for 'master'
+      let tableName = type === 'readers' ? 'readers' : 'output';
       
-      // Check if table exists
-      if (!reader.getTableNames().includes(tableName)) {
-        // If 'output' doesn't exist, try to find any table that might be relevant
-        const tables = reader.getTableNames();
-        if (tables.length > 0) {
-          tableName = tables[0];
+      // Check if 'master' table exists and use it if available (for your specific use case)
+      const tableNames = reader.getTableNames();
+      if (type === 'meters' && tableNames.includes('master')) {
+        tableName = 'master';
+        console.log('Using master table for import');
+      } else if (!tableNames.includes(tableName)) {
+        // If the default table doesn't exist, try to find any table that might be relevant
+        if (tableNames.length > 0) {
+          tableName = tableNames[0];
           console.log(`Table '${tableName}' not found, using first table: ${tableName}`);
         } else {
           return res.status(400).json({ error: `Table '${tableName}' not found in database and no other tables available.` });
@@ -590,44 +607,57 @@ export function registerAdminRoutes(app: Express) {
       const readerIdsToUpdate = new Set<string>();
       
       if (type === "readers") {
+        const insertReaders = [];
         for (const item of jsonData) {
-          await storage.createReader({
+          insertReaders.push({
             username: String(item.username || item.O_name || ''),
             password: String(item.password || "123456"),
             displayName: String(item.displayName || item.O_name || ''),
           });
           count++;
         }
+        await storage.bulkCreateReaders(insertReaders);
       } else if (type === "meters") {
+        const insertMeters = [];
         for (const item of jsonData) {
           // Transform using logic from scripts/import-access-db.ts
-          const accountNumber = String(item.O_accountno || item.accountNumber || '');
+          // Check if we're importing from 'master' table (with m_ prefix) or 'output' table (with O_ prefix)
+          const isMasterTable = tableName === 'master';
+          
+          const accountNumber = String(isMasterTable ? item.m_accountno : (item.O_accountno || item.accountNumber) || '');
           if (!accountNumber) continue;
 
-          const currentAmount = String(item.o_amount || 0);
-          const debts = String(item.o_outs || 0);
-          const totalAmount = String(item.o_amount_all || 0);
+          const currentAmount = String(isMasterTable ? (item.m_amount || item.B_outs) : (item.o_amount || 0));
+          const debts = String(isMasterTable ? (item.m_prevouts || item.B_prevouts) : (item.o_outs || 0));
+          const totalAmount = String(isMasterTable ? (item.m_outs || item.b_totouts) : (item.o_amount_all || 0));
 
-          await storage.createMeter({
+          // Validate that numeric fields are actually numbers
+          const prevReading = Number(isMasterTable ? item.m_prevread : (item.O_prevread || item.previousReading));
+          const currentAmt = Number(currentAmount);
+          const debtVal = Number(debts);
+          const totalAmt = Number(totalAmount);
+
+          insertMeters.push({
             accountNumber: accountNumber,
-            sequence: String(item.O_serial || item.sequence || "0"),
-            meterNumber: String(item.O_meter || item.meterNumber || ''),
-            category: mapCategory(Number(item.O_type || 0)),
-            subscriberName: String(item.O_name || item.subscriberName || 'غير محدد'),
-            address: String(item.O_address || item.address || ''),
-            record: String(item.O_streetno || item.record || "0"),
-            block: String(item.o_sect || item.block || "0"),
-            property: String(item.O_houseno || item.property || "0"),
-            previousReading: Number(item.O_prevread || item.previousReading) || 0,
-            previousReadingDate: convertDate(item.O_prevdt || item.O_avgdt || item.previousReadingDate),
-            currentAmount,
-            debts,
-            totalAmount,
+            sequence: String(isMasterTable ? item.m_serial : (item.O_serial || item.sequence) || "001").toString(),
+            meterNumber: String(isMasterTable ? item.m_meter : (item.O_meter || item.meterNumber) || '').toString(),
+            category: mapCategory(Number(isMasterTable ? item.m_type : (item.O_type || 0))),
+            subscriberName: String(isMasterTable ? item.m_name : (item.O_name || item.subscriberName) || 'غير محدد'),
+            address: String(isMasterTable ? item.m_address : (item.O_address || item.address) || ''),
+            record: String(isMasterTable ? item.m_sect : (item.O_streetno || item.record) || "1").toString(),
+            block: String(isMasterTable ? item.m_street_no : (item.o_sect || item.block) || "1").toString(),
+            property: String(isMasterTable ? item.m_houseno : (item.O_houseno || item.property) || "1").toString(),
+            previousReading: isNaN(prevReading) ? 0 : prevReading,
+            previousReadingDate: convertDate(isMasterTable ? item.m_prevdt : (item.O_prevdt || item.O_avgdt || item.previousReadingDate)),
+            currentAmount: isNaN(currentAmt) ? "0" : currentAmt.toString(),
+            debts: isNaN(debtVal) ? "0" : debtVal.toString(),
+            totalAmount: isNaN(totalAmt) ? "0" : totalAmt.toString(),
             readerId: item.readerId && String(item.readerId).trim() !== "" ? String(item.readerId) : null,
           });
           if (item.readerId) readerIdsToUpdate.add(String(item.readerId));
           count++;
         }
+        await storage.bulkCreateMeters(insertMeters);
       }
       
       // Increment versions for affected readers

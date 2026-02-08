@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import NetInfo from '@react-native-community/netinfo';
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
@@ -33,6 +33,7 @@ import { apiRequest, getApiUrl } from "@/lib/query-client";
 import { useAuth } from "@/contexts/AuthContext";
 import { getPendingReadings, removePendingReading, PendingReading } from "@/lib/offline-storage";
 import { uploadPhotoToServer } from "@/lib/api-utils";
+import { syncPendingReadings } from "@/lib/sync-utils";
 import type { MeterWithReading } from "@shared/schema";
 import { Alert } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -101,18 +102,18 @@ function MeterCard({ meter, index, onPress }: MeterCardProps) {
               {meter.accountNumber}
             </ThemedText>
           </View>
-          <View
-            style={[
-              styles.statusBadge,
-              { backgroundColor: isCompleted ? theme.success : theme.pending },
-            ]}
-          >
-            <Feather
-              name={isCompleted ? "check" : "clock"}
-              size={14}
-              color="#FFFFFF"
-            />
-          </View>
+            <View
+              style={[
+                styles.statusBadge,
+                { backgroundColor: isCompleted ? (meter.latestReading?.synced === false ? AppColors.accent : AppColors.success) : theme.pending },
+              ]}
+            >
+              <Feather
+                name={isCompleted ? (meter.latestReading?.synced === false ? "refresh-cw" : "check") : "clock"}
+                size={14}
+                color="#FFFFFF"
+              />
+            </View>
         </View>
 
         <View style={styles.cardContent}>
@@ -146,8 +147,16 @@ function MeterCard({ meter, index, onPress }: MeterCardProps) {
               <ThemedText style={[styles.label, { color: theme.textSecondary }]}>
                 القراءة السابقة
               </ThemedText>
-              <ThemedText style={[styles.readingValue, { color: AppColors.primary }]}>
+              <ThemedText style={[styles.value, { color: AppColors.primary }]}>
                 {meter.previousReading.toLocaleString("ar-IQ")}
+              </ThemedText>
+            </View>
+            <View style={styles.infoColumn}>
+              <ThemedText style={[styles.label, { color: theme.textSecondary }]}>
+                الحالة
+              </ThemedText>
+              <ThemedText style={[styles.value, { color: isCompleted ? (meter.latestReading?.synced === false ? AppColors.accent : theme.success) : theme.textSecondary }]}>
+                {isCompleted ? (meter.latestReading?.synced === false ? "بانتظار" : "متزامن") : "لم يقرأ"}
               </ThemedText>
             </View>
             <View style={styles.infoColumn}>
@@ -220,16 +229,28 @@ export default function MetersListScreen() {
     }
   }, [readerId]);
 
-  useEffect(() => {
-    loadFromLocalDB();
-  }, [loadFromLocalDB]);
-
-  const isLoading = isApiLoading && localMeters.length === 0;
-
+  // Load pending readings from local DB
   const loadPending = useCallback(async () => {
     const pending = getPendingReadingsFromDB();
     setPendingReadings(pending);
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadFromLocalDB();
+      loadPending();
+    }, [loadFromLocalDB, loadPending])
+  );
+
+  useEffect(() => {
+    if (apiMeters && apiMeters.length > 0) {
+      console.log(`Caching ${apiMeters.length} meters from API to local DB...`);
+      apiMeters.forEach(m => saveMeterToLocalDB(m));
+      loadFromLocalDB();
+    }
+  }, [apiMeters, loadFromLocalDB]);
+
+  const isLoading = isApiLoading && localMeters.length === 0;
 
   // Merge meters with pending readings for immediate UI feedback
   const combinedMeters = useMemo(() => {
@@ -252,15 +273,17 @@ export default function MetersListScreen() {
             id: pending.id,
             newReading: pending.newReading,
             meterId: meter.id,
-            readerId: meter.readerId,
+            readerId: meter.readerId || "",
             photoPath: pending.photoFileName,
+            localPhotoUri: pending.photoUri,
             notes: pending.notes,
             skipReason: pending.skipReason,
             createdAt: pending.createdAt,
             readingDate: pending.createdAt,
             isCompleted: true,
             latitude: pending.latitude,
-            longitude: pending.longitude
+            longitude: pending.longitude,
+            synced: false
           }
         };
       }
@@ -307,66 +330,42 @@ export default function MetersListScreen() {
     setIsSyncing(true);
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-    let successCount = 0;
-    let failCount = 0;
-    const readingsToProcess = [...pendingReadings]; // Create a copy to avoid processing issues
+    try {
+      const { successCount, failCount, errors } = await syncPendingReadings();
 
-    for (const reading of readingsToProcess) {
-      try {
-        // رفع الصورة أولاً إذا كانت موجودة
-        let photoPath = reading.photoFileName;
-        if (reading.photoUri && reading.photoFileName) {
-          console.log(`Uploading photo for reading ${reading.id}...`);
-          const uploadedPath = await uploadPhotoToServer(reading.photoUri, reading.photoFileName);
-          if (uploadedPath) {
-            photoPath = uploadedPath;
-          }
-        }
+      setIsSyncing(false);
+      await loadPending();
+      await refetch();
 
-        const res = await apiRequest("POST", "/api/readings", {
-          meterId: reading.meterId,
-          readerId: reading.readerId,
-          newReading: reading.newReading,
-          photoPath: photoPath,
-          notes: reading.notes,
-          skipReason: reading.skipReason,
-          latitude: reading.latitude?.toString(),
-          longitude: reading.longitude?.toString(),
-        });
-
-        if (res.ok) {
-          markReadingAsSynced(reading.id);
-          successCount++;
-          console.log(`Successfully synced reading ${reading.id}`);
-          // Force refresh meters to update the UI and mark meter as completed
-          setTimeout(() => {
-            refetch();
-          }, 1000);
-        } else {
-          const errorText = await res.text();
-          console.log(`Failed to sync reading ${reading.id}:`, errorText);
-          failCount++;
-        }
-      } catch (error) {
-        console.error("Sync error for reading:", reading.id, error);
-        failCount++;
+      if (successCount > 0) {
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
-    }
 
-    setIsSyncing(false);
-    await loadPending();
-    await refetch();
-
-    if (successCount > 0) {
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    }
-
-    // Only show alert if user manually triggered sync
-    if (failCount === 0 && successCount > 0) {
-      Alert.alert("تمت المزامنة", `تمت مزامنة ${successCount} قراءة بنجاح.`);
-    } else if (failCount > 0) {
-      // Don't show alert for automatic sync attempts to avoid spam
-      console.log(`Automatic sync: ${successCount} succeeded, ${failCount} failed`);
+      // Only show alert if user manually triggered sync
+      if (successCount > 0 && showAlert) {
+        Alert.alert("تمت المزامنة", `تمت مزامنة ${successCount} قراءة بنجاح${failCount > 0 ? `، ${failCount} فشلت` : ''}.`, [
+          { text: "حسناً" }
+        ]);
+      } else if (failCount > 0 && showAlert) {
+        const errorMessage = errors.length > 0 ? errors[0] : `فشلت مزامنة ${failCount} قراءة.`;
+        Alert.alert(
+          "فشلت المزامنة",
+          errorMessage,
+          [{ text: "حسناً" }]
+        );
+      } else if (showAlert && pendingReadings.length === 0) {
+        Alert.alert(
+          "لا توجد بيانات معلقة",
+          "جميع القراءات مزامنة بالفعل.",
+          [{ text: "حسناً" }]
+        );
+      }
+    } catch (error) {
+      console.error("Critical sync error:", error);
+      setIsSyncing(false);
+      if (showAlert) {
+        Alert.alert("خطأ", "حدث خطأ غير متوقع أثناء المزامنة");
+      }
     }
   };
 
