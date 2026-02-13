@@ -10,7 +10,7 @@
     },
     "preview": {
       "env": {
-        "EXPO_PUBLIC_DOMAIN": "meter-reader-backend.onrender.com"
+        "EXPO_PUBLIC_DOMAIN": "AZIZ-PC.local:5000"
       },
       "android": {
         "buildType": "apk"

@@ -23,19 +23,21 @@
       "predictiveBackGestureEnabled": false,
       "package": "com.meterreader.iraq",
       "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE",
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO"
-      ]
+      ],
+      "usesCleartextTraffic": true
     },
     "web": {
       "output": "single",
       "favicon": "./assets/images/favicon.png"
     },
     "updates": {
-      "url": "https://meter-reader-backend.onrender.com/manifest",
       "enabled": true,
       "checkAutomatically": "ON_LOAD",
-      "fallbackToCacheTimeout": 0
+      "fallbackToCacheTimeout": 3000
     },
     "plugins": [
       [

@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "expo:dev": "cross-env EXPO_PUBLIC_DOMAIN=localhost:5000 npx expo start",
+    "expo:dev": "npx expo start",
     "server:dev": "cross-env NODE_ENV=development tsx --env-file=.env server/index.ts",
     "expo:start:static:build": "npx expo start --no-dev --minify --localhost",
     "expo:static:build": "node --env-file=.env scripts/build.cjs",
@@ -19,7 +19,9 @@
     "check:format": "prettier --check \"**/*.{js,ts,tsx,css,json}\"",
     "format": "prettier --write \"**/*.{js,ts,tsx,css,json}\"",
     "test:server": "vitest run",
-    "test:client": "jest"
+    "test:client": "jest",
+    "android": "expo run:android",
+    "ios": "expo run:ios"
   },
   "dependencies": {
     "@expo-google-fonts/cairo": "^0.4.2",
@@ -59,6 +61,7 @@
     "expo-status-bar": "~3.0.9",
     "expo-symbols": "~1.0.8",
     "expo-system-ui": "~6.0.9",
+    "expo-updates": "~29.0.16",
     "expo-web-browser": "~15.0.10",
     "express": "^4.21.2",
     "express-session": "^1.18.2",

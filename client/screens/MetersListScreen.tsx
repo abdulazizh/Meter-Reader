@@ -246,6 +246,7 @@ export default function MetersListScreen() {
     if (apiMeters && apiMeters.length > 0) {
       console.log(`Caching ${apiMeters.length} meters from API to local DB...`);
       apiMeters.forEach(m => saveMeterToLocalDB(m));
+      console.log(`Successfully cached ${apiMeters.length} meters to local DB.`);
       loadFromLocalDB();
     }
   }, [apiMeters, loadFromLocalDB]);

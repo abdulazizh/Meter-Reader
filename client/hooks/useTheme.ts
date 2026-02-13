@@ -1,13 +1,13 @@
-import { Colors } from "@/constants/theme";
-import { useColorScheme } from "@/hooks/useColorScheme";
+import { useThemeContext } from "@/contexts/ThemeContext";
 
 export function useTheme() {
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === "dark";
-  const theme = Colors[colorScheme ?? "light"];
+  const { theme, isDark, colorScheme, themeMode, setThemeMode } = useThemeContext();
 
   return {
     theme,
     isDark,
+    colorScheme,
+    themeMode,
+    setThemeMode
   };
 }

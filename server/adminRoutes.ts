@@ -36,7 +36,6 @@ function requireAdmin(req: Request, res: Response, next: NextFunction) {
   return res.redirect('/admin/login');
 }
 
-// Helper functions for Access data transformation
 function mapCategory(typeCode: number): string {
   const categories: Record<number, string> = {
     1: 'منزلي',
@@ -44,6 +43,7 @@ function mapCategory(typeCode: number): string {
     3: 'صناعي',
     4: 'حكومي',
     5: 'زراعي',
+    21: 'منزلي', // Added based on user feedback
   };
   return categories[typeCode] || 'منزلي';
 }
@@ -160,6 +160,76 @@ export function registerAdminRoutes(app: Express) {
     } catch (error) {
       console.error("Error fetching meters:", error);
       res.status(500).json({ error: "Failed to fetch meters" });
+    }
+  });
+
+  app.get("/api/admin/dashboard-stats", requireAdmin, async (req, res) => {
+    try {
+      const allMeters = await storage.getAllMeters();
+      const allReadings = await storage.getAllReadings();
+      const allReaders = await storage.getAllReaders();
+
+      // Basic counts
+      const totalMeters = allMeters.length;
+      const totalReaders = allReaders.length;
+      const totalReadings = allReadings.length;
+
+      // Completion rate
+      const metersWithReadings = allMeters.filter(m => m.latestReading).length;
+      const completionRate = totalMeters > 0 ? (metersWithReadings / totalMeters) * 100 : 0;
+
+      // Collection stats
+      let totalCurrentAmount = 0;
+      let totalDebts = 0;
+      allMeters.forEach(m => {
+        totalCurrentAmount += parseFloat(m.currentAmount || "0");
+        totalDebts += parseFloat(m.debts || "0");
+      });
+
+      // Categories breakdown
+      const categories: Record<string, number> = {};
+      allMeters.forEach(m => {
+        categories[m.category] = (categories[m.category] || 0) + 1;
+      });
+
+      // Performance by reader
+      const readerPerformance: Record<string, number> = {};
+      allReadings.forEach(r => {
+        const reader = allReaders.find(rd => rd.id === r.readerId);
+        const name = reader ? reader.displayName : "غير مخصص";
+        readerPerformance[name] = (readerPerformance[name] || 0) + 1;
+      });
+
+      // Status breakdown (Completed vs Skipped)
+      const statusBreakdown = {
+        completed: allReadings.filter(r => r.isCompleted).length,
+        skipped: allReadings.filter(r => !r.isCompleted).length,
+      };
+
+      const categoryNames = await storage.getAllCategories();
+
+      res.json({
+        counts: {
+          meters: totalMeters,
+          readers: totalReaders,
+          readings: totalReadings,
+        },
+        kpis: {
+          completionRate: completionRate.toFixed(1),
+          totalCurrentAmount,
+          totalDebts,
+          collectionRatio: totalDebts > 0 ? (totalCurrentAmount / (totalCurrentAmount + totalDebts) * 100).toFixed(1) : "100",
+        },
+        charts: {
+          categories,
+          readerPerformance,
+          statusBreakdown,
+        },
+        categoryNames
+      });
+    } catch (error) {
+      console.error("Error fetching dashboard stats:", error);
+      res.status(500).json({ error: "Failed to fetch dashboard stats" });
     }
   });
 
@@ -619,9 +689,46 @@ export function registerAdminRoutes(app: Express) {
         await storage.bulkCreateReaders(insertReaders);
       } else if (type === "meters") {
         const insertMeters = [];
+        
+        // Try to load category names from cuttypeind table
+        let categoryMap: Record<number, string> = {};
+        try {
+          // Normalize table names to lower case for easier matching
+          const lowerTableNames = tableNames.map(t => t.toLowerCase());
+          const cutTypeTableIdx = lowerTableNames.indexOf('cuttypeind');
+          
+          if (cutTypeTableIdx !== -1) {
+            const cutTypeTable = reader.getTable(tableNames[cutTypeTableIdx]);
+            const cutTypeData = cutTypeTable.getData();
+            console.log(`Found cuttypeind table with ${cutTypeData.length} rows`);
+            
+            if (cutTypeData.length > 0) {
+              // Log columns to help debug
+              console.log('Columns in cuttypeind:', Object.keys(cutTypeData[0]));
+              
+              cutTypeData.forEach((row: any) => {
+                // Try multiple common field names for code and name
+                const code = row.type_code ?? row.m_type ?? row.code ?? row.C_Type ?? row.Type_No;
+                const name = row.type_name ?? row.m_typename ?? row.name ?? row.type ?? row.C_TypeName ?? row.Type_Name;
+                
+                if (code !== undefined && name !== undefined) {
+                  categoryMap[Number(code)] = String(name).trim();
+                }
+              });
+              console.log(`Successfully mapped ${Object.keys(categoryMap).length} categories from cuttypeind`);
+              
+              // Store category map in storage for frontend use if needed
+              await (storage as any).setCategoryMapping?.(categoryMap);
+            }
+          } else {
+            console.log('Table cuttypeind not found in database');
+          }
+        } catch (catError) {
+          console.warn('Could not load cuttypeind table:', catError);
+        }
+
         for (const item of jsonData) {
           // Transform using logic from scripts/import-access-db.ts
-          // Check if we're importing from 'master' table (with m_ prefix) or 'output' table (with O_ prefix)
           const isMasterTable = tableName === 'master';
           
           const accountNumber = String(isMasterTable ? item.m_accountno : (item.O_accountno || item.accountNumber) || '');
@@ -631,17 +738,24 @@ export function registerAdminRoutes(app: Express) {
           const debts = String(isMasterTable ? (item.m_prevouts || item.B_prevouts) : (item.o_outs || 0));
           const totalAmount = String(isMasterTable ? (item.m_outs || item.b_totouts) : (item.o_amount_all || 0));
 
-          // Validate that numeric fields are actually numbers
           const prevReading = Number(isMasterTable ? item.m_prevread : (item.O_prevread || item.previousReading));
           const currentAmt = Number(currentAmount);
           const debtVal = Number(debts);
           const totalAmt = Number(totalAmount);
 
+          // Use m_cust for master table as requested by user
+          const rawType = isMasterTable ? item.m_cust : (item.O_type || item.m_type || item.m_cust || 0);
+          const resolvedCategory = String(rawType ?? '0').trim();
+
+          if (count < 5) {
+            console.log(`Importing meter ${accountNumber}: rawType=${rawType}, storedAs=${resolvedCategory}`);
+          }
+
           insertMeters.push({
             accountNumber: accountNumber,
             sequence: String(isMasterTable ? item.m_serial : (item.O_serial || item.sequence) || "001").toString(),
             meterNumber: String(isMasterTable ? item.m_meter : (item.O_meter || item.meterNumber) || '').toString(),
-            category: mapCategory(Number(isMasterTable ? item.m_type : (item.O_type || 0))),
+            category: resolvedCategory,
             subscriberName: String(isMasterTable ? item.m_name : (item.O_name || item.subscriberName) || 'غير محدد'),
             address: String(isMasterTable ? item.m_address : (item.O_address || item.address) || ''),
             record: String(isMasterTable ? item.m_sect : (item.O_streetno || item.record) || "1").toString(),

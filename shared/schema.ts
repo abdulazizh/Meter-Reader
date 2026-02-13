@@ -49,6 +49,11 @@ export const metersRelations = relations(meters, ({ one, many }) => ({
   readings: many(readings),
 }));
 
+export const categories = pgTable("categories", {
+  id: integer("id").primaryKey(), // The raw numeric ID from Access DB
+  name: text("name").notNull(),
+});
+
 export const readings = pgTable("readings", {
   id: varchar("id")
     .primaryKey()

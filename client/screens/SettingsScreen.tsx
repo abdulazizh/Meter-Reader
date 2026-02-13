@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { View, StyleSheet, Image, Pressable, Alert } from "react-native";
+import { View, StyleSheet, Image, Pressable, Alert, TextInput } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -14,6 +14,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius, AppColors } from "@/constants/theme";
 import { apiRequest, getApiUrl } from "@/lib/query-client";
+import { configService } from "@/lib/config-service";
 import { useAuth } from "@/contexts/AuthContext";
 import { getExportDataFromLocalDB } from "@/lib/local-db";
 import { syncPendingReadings } from "@/lib/sync-utils";
@@ -89,12 +90,75 @@ interface ReaderProfile {
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
-  const { theme } = useTheme();
+  const { theme, themeMode, setThemeMode, isDark } = useTheme();
   const { reader, logout } = useAuth();
   const [readerProfile, setReaderProfile] = useState<ReaderProfile | null>(
     null,
   );
   const [isExporting, setIsExporting] = useState(false);
+  const [serverDomain, setServerDomain] = useState<string>("");
+
+  // Load server domain on mount
+  useEffect(() => {
+    const loadServerDomain = async () => {
+      const domain = await configService.getServerDomain();
+      setServerDomain(domain);
+    };
+    loadServerDomain();
+  }, []);
+
+  const handleThemePress = async () => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Alert.alert(
+      "المظهر",
+      "اختر مظهر التطبيق المفضل لديك",
+      [
+        {
+          text: "فاتح",
+          onPress: () => setThemeMode("light"),
+        },
+        {
+          text: "داكن",
+          onPress: () => setThemeMode("dark"),
+        },
+        {
+          text: "تلقائي (النظام)",
+          onPress: () => setThemeMode("system"),
+        },
+        {
+          text: "إلغاء",
+          style: "cancel",
+        },
+      ]
+    );
+  };
+
+  const handleServerChange = async () => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Alert.prompt(
+      "تغيير السيرفر",
+      "أدخل عنوان السيرفر الجديد (مثل: AZIZ-PC.local:5000)",
+      [
+        {
+          text: "إلغاء",
+          style: "cancel",
+        },
+        {
+          text: "حفظ",
+          onPress: async (newDomain?: string) => {
+            if (newDomain && newDomain.trim()) {
+              await configService.updateServerDomain(newDomain.trim());
+              setServerDomain(newDomain.trim());
+              await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              Alert.alert("تم الحفظ", "تم تحديث عنوان السيرفر بنجاح");
+            }
+          },
+        },
+      ],
+      "plain-text",
+      serverDomain
+    );
+  };
 
   const readerId = reader?.id || null;
 
@@ -106,7 +170,8 @@ export default function SettingsScreen() {
 
   const fetchReaderProfile = async (id: string) => {
     try {
-      const url = new URL(`/api/reader/${id}`, getApiUrl());
+      const apiUrl = await getApiUrl();
+      const url = new URL(`/api/reader/${id}`, apiUrl);
       const response = await fetch(url.toString());
       const data = await response.json();
       setReaderProfile(data);
@@ -428,9 +493,37 @@ export default function SettingsScreen() {
           />
           <View style={[styles.divider, { backgroundColor: theme.border }]} />
           <SettingsItem
-            icon="moon"
+            icon={isDark ? "moon" : "sun"}
             title="المظهر"
-            subtitle="تلقائي (حسب النظام)"
+            subtitle={
+              themeMode === "system"
+                ? "تلقائي (حسب النظام)"
+                : themeMode === "dark"
+                ? "داكن"
+                : "فاتح"
+            }
+            onPress={handleThemePress}
+          />
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <ThemedText
+          style={[styles.sectionTitle, { color: theme.textSecondary }]}
+        >
+          الاتصال
+        </ThemedText>
+        <View
+          style={[
+            styles.sectionContent,
+            { backgroundColor: theme.backgroundDefault },
+          ]}
+        >
+          <SettingsItem
+            icon="server"
+            title="عنوان السيرفر"
+            subtitle={serverDomain || "جاري التحميل..."}
+            onPress={handleServerChange}
           />
         </View>
       </View>

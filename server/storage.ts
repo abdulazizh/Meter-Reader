@@ -9,6 +9,7 @@ import {
   type Reading,
   type InsertReading,
   type MeterWithReading,
+  categories,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, sql } from "drizzle-orm";
@@ -32,6 +33,8 @@ export interface IStorage {
   bulkCreateReaders(readers: InsertReader[]): Promise<void>;
   deleteAllMeters(): Promise<void>;
   deleteAllReadings(): Promise<void>;
+  getAllCategories(): Promise<Record<number, string>>;
+  setCategoryMapping(mapping: Record<number, string>): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -256,6 +259,29 @@ export class DatabaseStorage implements IStorage {
 
   async deleteAllReadings(): Promise<void> {
     await db.delete(readings);
+  }
+
+  async getAllCategories(): Promise<Record<number, string>> {
+    const rows = await db.select().from(categories);
+    const mapping: Record<number, string> = {};
+    rows.forEach(row => {
+      mapping[row.id] = row.name;
+    });
+    return mapping;
+  }
+
+  async setCategoryMapping(mapping: Record<number, string>): Promise<void> {
+    // Upsert each category
+    for (const [id, name] of Object.entries(mapping)) {
+      const catId = parseInt(id);
+      await db
+        .insert(categories)
+        .values({ id: catId, name })
+        .onConflictDoUpdate({
+          target: categories.id,
+          set: { name },
+        });
+    }
   }
 
   async getReadingsByMonth(year: number, month: number): Promise<Reading[]> {

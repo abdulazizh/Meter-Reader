@@ -17,6 +17,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     fs.mkdirSync(uploadsDir, { recursive: true });
   }
 
+  // Config endpoint for remote configuration
+  app.get("/api/config", (req, res) => {
+    try {
+      const config = {
+        serverDomain: process.env.EXPO_PUBLIC_DOMAIN || "AZIZ-PC.local:5000",
+        version: "1.0.0",
+        updatedAt: new Date().toISOString(),
+      };
+      res.json(config);
+    } catch (error) {
+      console.error("Error fetching config:", error);
+      res.status(500).json({ error: "Failed to fetch config" });
+    }
+  });
+
+
   app.post("/api/login", async (req, res) => {
     try {
       const { username, password } = req.body;

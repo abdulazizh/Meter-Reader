@@ -10,7 +10,7 @@ export const uploadPhotoToServer = async (uri: string, fileName: string): Promis
       encoding: FileSystem.EncodingType.Base64,
     });
 
-    const baseUrl = getApiUrl();
+    const baseUrl = await getApiUrl();
     const uploadUrl = `${baseUrl}${baseUrl.endsWith('/') ? '' : '/'}api/upload-photo`;
     console.log(`Uploading to ${uploadUrl}...`);
     const response = await fetch(uploadUrl, {

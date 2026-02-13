@@ -101,10 +101,11 @@ export default function ReadingEntryScreen() {
          console.log("Loading local photo URI:", meter.latestReading.localPhotoUri);
          setPhotoUri(meter.latestReading.localPhotoUri);
       } else if (meter.latestReading.photoPath) {
-        const baseUrl = getApiUrl();
-        const photoUrl = `${baseUrl.replace(/\/$/, "")}/api/photo/${meter.latestReading.photoPath}`;
-        console.log("Loading server photo URL:", photoUrl);
-        setPhotoUri(photoUrl);
+        getApiUrl().then(baseUrl => {
+          const photoUrl = `${baseUrl.replace(/\/$/, "")}/api/photo/${meter.latestReading!.photoPath}`;
+          console.log("Loading server photo URL:", photoUrl);
+          setPhotoUri(photoUrl);
+        });
       }
     }
   }, [meter]);

@@ -1,28 +1,39 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { configService } from "./config-service";
 
 /**
  * Gets the base URL for the Express API server (e.g., "http://localhost:3000")
  * @returns {string} The API base URL
  */
-export function getApiUrl(): string {
-  // Fallback to production URL if env var is missing (e.g. in EAS build)
-  let host = process.env.EXPO_PUBLIC_DOMAIN || "meter-reader-backend.onrender.com";
+export async function getApiUrl(): Promise<string> {
+  try {
+    // Get server domain from ConfigService (which uses AsyncStorage)
+    const host = await configService.getServerDomain();
 
-  if (!host) {
-    // Should not happen with the fallback above, but for safety:
-    host = "meter-reader-backend.onrender.com";
+    if (!host) {
+      return "https://meter-reader-backend.onrender.com/";
+    }
+
+    // Clean brackets if user accidentally included them (common mistake with IPv6 vs IPv4)
+    const cleanHost = host.replace(/[\[\]]/g, '');
+
+    // Check if host already includes protocol
+    if (cleanHost.startsWith('http://') || cleanHost.startsWith('https://')) {
+      return cleanHost;
+    }
+
+    // Use http for localhost, IP addresses, or .local domains
+    const isIpOrLocalhost = cleanHost.includes("localhost") || 
+                            /^\d+\.\d+\.\d+\.\d+/.test(cleanHost) ||
+                            cleanHost.includes(".local");
+    const protocol = isIpOrLocalhost ? "http" : "https";
+    
+    const url = new URL(`${protocol}://${cleanHost}`);
+    return url.href;
+  } catch (error) {
+    console.warn("Failed to parse API URL, falling back to default:", error);
+    return "https://meter-reader-backend.onrender.com/";
   }
-
-  // Check if host already includes protocol
-  if (host.startsWith('http://') || host.startsWith('https://')) {
-    return host;
-  }
-
-  // Use http for localhost or IP addresses, otherwise https
-  const protocol = host.includes("localhost") || /^\d+\.\d+\.\d+\.\d+/.test(host) ? "http" : "https";
-  let url = new URL(`${protocol}://${host}`);
-
-  return url.href;
 }
 
 async function throwIfResNotOk(res: Response) {
@@ -38,23 +49,27 @@ export async function apiRequest(
   route: string,
   data?: unknown | undefined,
 ): Promise<Response> {
-  const baseUrl = getApiUrl();
+  const baseUrl = await getApiUrl();
   const url = new URL(route, baseUrl);
 
   const headers: Record<string, string> = {
-    "Origin": "app://meter-reader", // Identify mobile app
     ...(data ? { "Content-Type": "application/json" } : {}),
   };
 
-  const res = await fetch(url, {
-    method,
-    headers,
-    body: data ? JSON.stringify(data) : undefined,
-    credentials: "include", // Always include cookies for session support
-  });
+  try {
+    const res = await fetch(url, {
+      method,
+      headers,
+      body: data ? JSON.stringify(data) : undefined,
+      credentials: "include", // Always include cookies for session support
+    });
 
-  await throwIfResNotOk(res);
-  return res;
+    await throwIfResNotOk(res);
+    return res;
+  } catch (error) {
+    console.error(`[API FETCH ERROR] URL: ${url}, Method: ${method}, Error:`, error);
+    throw error;
+  }
 }
 
 type UnauthorizedBehavior = "returnNull" | "throw";
@@ -63,13 +78,11 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const baseUrl = getApiUrl();
+    const baseUrl = await getApiUrl();
     const url = new URL(queryKey.join("/") as string, baseUrl);
 
     const res = await fetch(url, {
-      headers: {
-        "Origin": "app://meter-reader",
-      },
+      headers: {},
       credentials: "include",
     });
 

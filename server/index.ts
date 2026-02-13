@@ -6,6 +6,7 @@ import { registerRoutes } from "./routes";
 import { registerAdminRoutes } from "./adminRoutes";
 import * as fs from "fs";
 import * as path from "path";
+import { networkInterfaces } from "os";
 
 const app = express();
 app.set('trust proxy', true); // Trust Render's proxy for secure cookies
@@ -19,55 +20,23 @@ declare module "http" {
 
 function setupCors(app: express.Application) {
   app.use((req, res, next) => {
-    const origins = new Set<string>();
-
-    if (process.env.REPLIT_DEV_DOMAIN) {
-      origins.add(`https://${process.env.REPLIT_DEV_DOMAIN}`);
-    }
-
-    if (process.env.REPLIT_DOMAINS) {
-      process.env.REPLIT_DOMAINS.split(",").forEach((d: string) => {
-        origins.add(`https://${d.trim()}`);
-      });
-    }
-
     const origin = req.header("origin");
-    const isLocalhost =
-      origin?.startsWith("http://localhost:") ||
-      origin?.startsWith("http://127.0.0.1:");
-    const isMobileApp = origin === "app://meter-reader";
+    
+    // Log every request to see if it even reaches the server
+    console.log(`[DEBUG] ${req.method} ${req.path} from ${req.ip} (Origin: ${origin || 'none'})`);
 
-    // In production or for mobile apps (no origin), we want to be permissive but secure
-    // We explicitly trust our mobile app origin
-    if (!origin || origins.has(origin) || isLocalhost || isMobileApp || process.env.NODE_ENV === "production") {
-      if (origin) {
-        res.header("Access-Control-Allow-Origin", origin);
-        res.header("Access-Control-Allow-Credentials", "true");
-      } else if (process.env.NODE_ENV === "production") {
-        // In production, if origin is missing, we use the host header to avoid '*' 
-        // which breaks credentialed requests
-        const host = req.header("host");
-        if (host) {
-          res.header("Access-Control-Allow-Origin", `https://${host}`);
-          res.header("Access-Control-Allow-Credentials", "true");
-        } else {
-          res.header("Access-Control-Allow-Origin", "*");
-        }
-      } else {
-        // Fallback for older app versions or if origin stripping occurs
-        res.header("Access-Control-Allow-Origin", "*");
-      }
-      
-      res.header(
-        "Access-Control-Allow-Methods",
-        "GET, POST, PUT, DELETE, PATCH, OPTIONS",
-      );
-      res.header(
-        "Access-Control-Allow-Headers", 
-        "Content-Type, Authorization, X-Requested-With, Accept, Origin, expo-platform, expo-protocol-version, expo-sfv-version"
-      );
-      res.header("Access-Control-Expose-Headers", "expo-protocol-version, expo-sfv-version, Set-Cookie");
-    }
+    // Standard CORS headers
+    res.header("Access-Control-Allow-Origin", origin || "*");
+    res.header("Access-Control-Allow-Credentials", "true");
+    res.header(
+      "Access-Control-Allow-Methods",
+      "GET, POST, PUT, DELETE, PATCH, OPTIONS",
+    );
+    res.header(
+      "Access-Control-Allow-Headers", 
+      "Content-Type, Authorization, X-Requested-With, Accept, Origin, expo-platform, expo-protocol-version, expo-sfv-version"
+    );
+    res.header("Access-Control-Expose-Headers", "expo-protocol-version, expo-sfv-version, Set-Cookie");
 
     if (req.method === "OPTIONS") {
       return res.sendStatus(200);
@@ -366,7 +335,21 @@ function setupErrorHandler(app: express.Application) {
       host: "0.0.0.0",
     },
     () => {
+      const addresses = [];
+      const interfaces = networkInterfaces();
+      for (const name of Object.keys(interfaces)) {
+        const netInterface = interfaces[name];
+        if (netInterface) {
+          for (const net of netInterface) {
+            if (net.family === 'IPv4') {
+              addresses.push(`http://${net.address}:${port}`);
+            }
+          }
+        }
+      }
       log(`express server serving on port ${port}`);
+      log(`Available on:`);
+      addresses.forEach(addr => log(`  ${addr}`));
     },
   );
 })();

@@ -9,6 +9,7 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
+  Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -18,6 +19,8 @@ import { useTheme } from '@/hooks/useTheme';
 import { Spacing, BorderRadius, AppColors } from '@/constants/theme';
 import { apiRequest, getApiUrl } from '@/lib/query-client';
 import { useAuth } from '@/contexts/AuthContext';
+import { configService } from '@/lib/config-service';
+import { Feather } from '@expo/vector-icons';
 
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
@@ -28,7 +31,24 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   
-  const apiUrl = getApiUrl();
+  const [apiUrl, setApiUrl] = useState<string>('');
+  const [isServerModalVisible, setIsServerModalVisible] = useState(false);
+  const [tempServerDomain, setTempServerDomain] = useState('');
+  
+  React.useEffect(() => {
+    getApiUrl().then(setApiUrl);
+  }, []);
+
+  const handleSaveServer = async () => {
+    if (tempServerDomain.trim()) {
+      await configService.updateServerDomain(tempServerDomain.trim());
+      const newUrl = await getApiUrl();
+      setApiUrl(newUrl);
+      setIsServerModalVisible(false);
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert("تم الحفظ", "تم تحديث عنوان السيرفر بنجاح");
+    }
+  };
 
   const handleLogin = async () => {
     if (!username.trim() || !password.trim()) {
@@ -58,15 +78,11 @@ export default function LoginScreen() {
       console.error('Login error:', error);
       const isNetworkError = error?.message?.includes('Network request failed') || error?.message?.includes('fetch');
       
-      let errorMessage = 'حدث خطأ في الاتصال بالخادم';
+      const errorDetails = error?.message || String(error);
+      let errorMessage = `حدث خطأ في الاتصال بالخادم:\n${errorDetails}`;
+      
       if (isNetworkError) {
-        try {
-          // const { getApiUrl } = require('@/lib/query-client'); // No longer needed as we imported it
-          // const apiUrl = getApiUrl();
-          errorMessage = `لا يوجد اتصال بالسيرفر.\nتأكد من الإنترنت أو أن السيرفر يعمل.\n\nالرابط: ${apiUrl}`;
-        } catch (e) {
-          errorMessage = 'لا يوجد اتصال بالسيرفر. يرجى التأكد من الإنترنت.';
-        }
+        errorMessage = `فشل الاتصال بالسيرفر.\n\n1. تأكد أن الهاتف والكمبيوتر على نفس الشبكة.\n2. تأكد أن السيرفر يعمل.\n3. قد يكون "جدار حماية ويندوز" (Firewall) يحظر التطبيق.\n\nالرابط: ${apiUrl}\nالخطأ: ${errorDetails}`;
       }
       
       Alert.alert('خطأ في الاتصال', errorMessage);
@@ -141,7 +157,6 @@ export default function LoginScreen() {
               editable={!isLoading}
             />
           </View>
-
           <Pressable
             style={({ pressed }) => [
               styles.loginButton,
@@ -157,7 +172,75 @@ export default function LoginScreen() {
               <ThemedText style={styles.loginButtonText}>دخول</ThemedText>
             )}
           </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [
+              styles.serverSettingsButton,
+              { opacity: pressed ? 0.6 : 1 },
+            ]}
+            onPress={async () => {
+              const current = await getApiUrl();
+              const domainOnly = current.replace('http://', '').replace('https://', '').replace(/\/$/, '');
+              setTempServerDomain(domainOnly);
+              setIsServerModalVisible(true);
+            }}
+          >
+            <Feather name="settings" size={16} color={theme.textSecondary} />
+            <ThemedText style={[styles.serverSettingsText, { color: theme.textSecondary }]}>
+              إعدادات السيرفر
+            </ThemedText>
+          </Pressable>
         </View>
+
+        {/* Modal for Server Settings */}
+        <Modal
+          visible={isServerModalVisible}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setIsServerModalVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContent, { backgroundColor: theme.backgroundDefault }]}>
+              <ThemedText style={styles.modalTitle}>إعدادات السيرفر</ThemedText>
+              <ThemedText style={[styles.modalSubtitle, { color: theme.textSecondary }]}>
+                أدخل عنوان السيرفر (مثل IP الكمبيوتر)
+              </ThemedText>
+              
+              <TextInput
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: theme.backgroundSecondary,
+                    color: theme.text,
+                    borderColor: theme.border,
+                    marginTop: Spacing.md,
+                  },
+                ]}
+                placeholder="192.168.137.1:5000"
+                placeholderTextColor={theme.textSecondary}
+                value={tempServerDomain}
+                onChangeText={setTempServerDomain}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+
+              <View style={styles.modalButtons}>
+                <Pressable
+                  style={[styles.modalButton, { backgroundColor: theme.backgroundSecondary }]}
+                  onPress={() => setIsServerModalVisible(false)}
+                >
+                  <ThemedText style={{ color: theme.text }}>إلغاء</ThemedText>
+                </Pressable>
+                <Pressable
+                  style={[styles.modalButton, { backgroundColor: AppColors.primary }]}
+                  onPress={handleSaveServer}
+                >
+                  <ThemedText style={{ color: '#fff' }}>حفظ</ThemedText>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </Modal>
 
         <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.lg }]}>
           <ThemedText style={styles.footerText}>
@@ -274,5 +357,58 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Cairo_400Regular',
     color: 'rgba(255, 255, 255, 0.7)',
+  },
+  serverSettingsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: Spacing.xl,
+    gap: Spacing.sm,
+    padding: Spacing.sm,
+  },
+  serverSettingsText: {
+    fontSize: 14,
+    fontFamily: 'Cairo_400Regular',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Spacing.xl,
+  },
+  modalContent: {
+    width: '100%',
+    padding: Spacing.xl,
+    borderRadius: BorderRadius.lg,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontFamily: 'Cairo_700Bold',
+    textAlign: 'center',
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    fontFamily: 'Cairo_400Regular',
+    textAlign: 'center',
+    marginTop: Spacing.xs,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: Spacing.md,
+    marginTop: Spacing.xl,
+  },
+  modalButton: {
+    flex: 1,
+    height: 48,
+    borderRadius: BorderRadius.md,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

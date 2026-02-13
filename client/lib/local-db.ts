@@ -1,12 +1,20 @@
 import * as SQLite from 'expo-sqlite';
 import { Platform } from 'react-native';
 
-// Open database
-const db = SQLite.openDatabaseSync('meter_reader.db');
+let _db: SQLite.SQLiteDatabase | null = null;
+
+const getDB = () => {
+  if (!_db) {
+    _db = SQLite.openDatabaseSync('meter_reader.db');
+  }
+  return _db;
+};
 
 // Initialize database tables
 export const initLocalDB = () => {
-  // Create readings table
+  try {
+    const db = getDB();
+    // Create readings table
   db.execSync(
     `CREATE TABLE IF NOT EXISTS readings (
       id TEXT PRIMARY KEY NOT NULL,
@@ -47,6 +55,9 @@ export const initLocalDB = () => {
       isCompleted BOOLEAN DEFAULT 0
     )`
   );
+  } catch (error) {
+    console.log('Error initializing local DB:', error);
+  }
 };
 
 // Save reading to local database
@@ -63,6 +74,7 @@ export const saveReadingToLocalDB = (
   longitude?: number
 ) => {
   try {
+    const db = getDB();
     db.runSync(
       `INSERT OR REPLACE INTO readings 
       (id, meterId, readerId, newReading, photoUri, photoFileName, notes, skipReason, latitude, longitude, createdAt, isCompleted, synced) 
@@ -93,6 +105,7 @@ export const saveReadingToLocalDB = (
 // Get reading by meter ID from local database
 export const getReadingByMeterId = (meterId: string): any => {
   try {
+    const db = getDB();
     const result = db.getAllSync(`SELECT * FROM readings WHERE meterId = ? ORDER BY createdAt DESC LIMIT 1`, [meterId]);
     return result.length > 0 ? result[0] : null;
   } catch (error) {
@@ -104,6 +117,7 @@ export const getReadingByMeterId = (meterId: string): any => {
 // Get all pending readings from local database
 export const getPendingReadingsFromDB = (): any[] => {
   try {
+    const db = getDB();
     return db.getAllSync(`SELECT * FROM readings WHERE synced = 0 ORDER BY createdAt DESC`);
   } catch (error) {
     console.log('Error getting pending readings from local DB:', error);
@@ -114,6 +128,7 @@ export const getPendingReadingsFromDB = (): any[] => {
 // Mark reading as synced
 export const markReadingAsSynced = (id: string) => {
   try {
+    const db = getDB();
     db.runSync(`UPDATE readings SET synced = 1 WHERE id = ?`, [id]);
     console.log('Reading marked as synced');
     return true;
@@ -126,6 +141,7 @@ export const markReadingAsSynced = (id: string) => {
 // Save meter to local database
 export const saveMeterToLocalDB = (meter: any) => {
   try {
+    const db = getDB();
     db.runSync(
       `INSERT OR REPLACE INTO meters 
       (id, accountNumber, sequence, meterNumber, category, subscriberName, record, block, property, 
@@ -150,8 +166,6 @@ export const saveMeterToLocalDB = (meter: any) => {
         meter.readerId
       ]
     );
-    
-    console.log('Meter saved to local DB successfully');
     return true;
   } catch (error) {
     console.log('Error saving meter to local DB:', error);
@@ -162,6 +176,7 @@ export const saveMeterToLocalDB = (meter: any) => {
 // Get all meters from local database
 export const getMetersFromLocalDB = (readerId: string): any[] => {
   try {
+    const db = getDB();
     const rows = db.getAllSync(
       `SELECT m.*, r.id as r_id, r.newReading as r_newReading, r.photoUri as r_photoUri, 
               r.photoFileName as r_photoFileName, r.notes as r_notes,
@@ -261,6 +276,7 @@ export const getExportDataFromLocalDB = (readerId: string) => {
 // Clear local database (for testing purposes)
 export const clearLocalDB = () => {
   try {
+    const db = getDB();
     db.execSync(`DELETE FROM readings`);
     db.execSync(`DELETE FROM meters`);
     console.log('Local DB cleared successfully');

@@ -12,7 +12,7 @@ import { Feather } from "@expo/vector-icons";
 import { ThemedView } from "@/components/ThemedView";
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
-import { Spacing, BorderRadius, Fonts } from "@/constants/theme";
+import { Spacing, BorderRadius, Fonts, Colors } from "@/constants/theme";
 
 export type ErrorFallbackProps = {
   error: Error;
@@ -20,7 +20,14 @@ export type ErrorFallbackProps = {
 };
 
 export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
-  const { theme } = useTheme();
+  let theme: any;
+  try {
+    const themeContext = useTheme();
+    theme = themeContext.theme;
+  } catch (e) {
+    // Fallback if theme context is unavailable
+    theme = Colors.light;
+  }
   const [isModalVisible, setIsModalVisible] = useState(false);
 
   const handleRestart = async () => {
