@@ -21,7 +21,8 @@
     "test:server": "vitest run",
     "test:client": "jest",
     "android": "expo run:android",
-    "ios": "expo run:ios"
+    "ios": "expo run:ios",
+    "tunnel": "npx cloudflared tunnel --url http://localhost:5000"
   },
   "dependencies": {
     "@expo-google-fonts/cairo": "^0.4.2",

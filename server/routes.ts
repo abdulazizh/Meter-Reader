@@ -11,9 +11,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
   
-  // Ensure uploads directory exists
-  const uploadsDir = path.join(__dirname, "uploads");
+  // Ensure uploads directory exists at project root
+  const uploadsDir = path.join(process.cwd(), "uploads");
+  console.log(`[DEBUG] Uploads directory initialized at: ${uploadsDir}`);
   if (!fs.existsSync(uploadsDir)) {
+    console.log(`[DEBUG] Creating uploads directory...`);
     fs.mkdirSync(uploadsDir, { recursive: true });
   }
 
@@ -368,48 +370,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/upload-photo", async (req, res) => {
     try {
       const { photoBase64, fileName } = req.body;
-      console.log(`Incoming photo upload for file: ${fileName}`);
+      console.log(`[DEBUG] Incoming photo upload: ${fileName}`);
   
       if (!photoBase64 || !fileName) {
-        console.error("Missing photo data or filename");
+        console.error("[ERROR] Missing photo data or filename");
         return res.status(400).json({ error: "Missing photo data or filename" });
       }
   
       const base64Data = photoBase64.replace(/^data:image\/\w+;base64,/, "");
       const buffer = Buffer.from(base64Data, "base64");
   
-      const uploadsDir = path.join(process.cwd(), "server", "uploads");
-      console.log(`Saving photo to: ${uploadsDir}`);
+      // Use the consistent uploadsDir defined at the top
+      const photoPath = path.join(uploadsDir, fileName);
+      console.log(`[DEBUG] Saving photo to: ${photoPath}`);
       
-      // Ensure the directory exists
+      // Ensure the directory exists (double check just in case)
       if (!fs.existsSync(uploadsDir)) {
         fs.mkdirSync(uploadsDir, { recursive: true });
       }
 
-      const photoPath = path.join(uploadsDir, fileName);
-      
       // Write the image buffer to the file system
       fs.writeFileSync(photoPath, buffer);
-      console.log("Photo written to disk successfully");
+      console.log("[DEBUG] Photo written to disk successfully");
   
       res.json({
         success: true,
-        photoPath: fileName, // Return just the filename since it's stored locally
+        photoPath: fileName,
         message: "Photo uploaded successfully"
       });
     } catch (error) {
-      console.error("Error uploading photo:", error);
+      console.error("[ERROR] Error uploading photo:", error);
       res.status(500).json({ error: "Failed to upload photo" });
     }
   });
   
   app.get("/api/photo/:path(*)", (req, res) => {
     try {
-      const photoPath = req.params.path;
-      const fullPath = path.join(__dirname, "uploads", photoPath);
+      const fileName = req.params.path;
+      // Use the consistent uploadsDir defined at the top
+      const fullPath = path.join(uploadsDir, fileName);
+      console.log(`[DEBUG] Serving photo request for: ${fileName}, Absolute Path: ${fullPath}`);
   
       // Check if file exists
       if (!fs.existsSync(fullPath)) {
+        console.warn(`[DEBUG] Photo NOT found at: ${fullPath}`);
         return res.status(404).json({ error: "Photo not found" });
       }
   
@@ -426,7 +430,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.setHeader("Content-Type", contentType);
       res.send(imageData);
     } catch (error) {
-      console.error("Error fetching photo:", error);
+      console.error("[ERROR] Error fetching photo:", error);
       res.status(500).json({ error: "Failed to fetch photo" });
     }
   });
