@@ -131,7 +131,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       console.log("Received reading sync request for meter:", meterId);
-      console.log(`Syncing reading for meter ${meterId}, newReading: ${newReading}`);
+      console.log(`Syncing reading for meter ${meterId}, newReading: ${newReading}, Location: ${req.body.latitude}, ${req.body.longitude}`);
       const reading = await storage.createReading({
         meterId,
         readerId,
@@ -139,6 +139,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         photoPath: photoPath || null,
         notes: notes || null,
         skipReason: null,
+        latitude: req.body.latitude ? req.body.latitude.toString() : null,
+        longitude: req.body.longitude ? req.body.longitude.toString() : null,
       });
 
       console.log(`Reading created with ID ${reading.id}. NO meter update should follow.`);

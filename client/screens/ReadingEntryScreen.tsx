@@ -218,9 +218,18 @@ export default function ReadingEntryScreen() {
 
   const handleNextPress = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    
+    // If a reading is entered and photo taken, but not saved yet
+    if (newReading.trim() && photoUri && !isCompleted) {
+      await handleSave();
+      return;
+    }
+    
+    // If no reading and not completed, show skip modal
     if (!newReading.trim() && !isCompleted) {
       setShowSkipModal(true);
     } else {
+      // If already completed or no data to save, just go to next
       goToNextMeter();
     }
   };
@@ -261,7 +270,7 @@ export default function ReadingEntryScreen() {
     const savedLocally = await saveReadingToLocalDB(
       readingId,
       meter.id,
-      meter.readerId,
+      meter.readerId || "",
       null,
       null,
       null,
@@ -500,7 +509,7 @@ export default function ReadingEntryScreen() {
     const savedLocally = await saveReadingToLocalDB(
       readingId,
       meter.id,
-      meter.readerId,
+      meter.readerId || "",
       readingValue,
       permanentPhotoUri,
       photoFileName,
@@ -1200,7 +1209,7 @@ const styles = StyleSheet.create({
   totalRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "left",
+    alignItems: "center",
     borderTopWidth: 1,
     paddingTop: Spacing.md,
   },
