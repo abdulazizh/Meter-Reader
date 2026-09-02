@@ -1,5 +1,6 @@
 import React from "react";
-import { View, StyleSheet, Image } from "react-native";
+import { View, StyleSheet } from "react-native";
+import { Image } from "expo-image";
 import { ThemedText } from "@/components/ThemedText";
 import { Spacing } from "@/constants/theme";
 
@@ -13,7 +14,7 @@ export function HeaderTitle({ title }: HeaderTitleProps) {
       <Image
         source={require("../../assets/images/icon.png")}
         style={styles.icon}
-        resizeMode="contain"
+        contentFit="contain"
       />
       <ThemedText style={styles.title}>{title}</ThemedText>
     </View>
@@ -25,6 +26,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    height: 48,
   },
   icon: {
     width: 32,

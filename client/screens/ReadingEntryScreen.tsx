@@ -52,6 +52,7 @@ const SKIP_REASONS = [
   { id: "broken", label: "عاطل" },
   { id: "not_found", label: "غير موجود" },
   { id: "demolished", label: "مهدوم" },
+  { id: "abandoned", label: "متروك" },
   { id: "other", label: "سبب آخر" },
 ];
 
@@ -71,6 +72,8 @@ export default function ReadingEntryScreen() {
   const [cameraRef, setCameraRef] = useState<CameraView | null>(null);
   const [showSkipModal, setShowSkipModal] = useState(false);
   const [otherReason, setOtherReason] = useState("");
+  const [zoom, setZoom] = useState(0);
+  const [isSubmittingSkip, setIsSubmittingSkip] = useState(false);
 
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [mediaLibraryPermission, requestMediaLibraryPermission] =
@@ -238,8 +241,9 @@ export default function ReadingEntryScreen() {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     goToPreviousMeter();
   };
-
   const handleSkipWithReason = async (reason: string) => {
+    if (isSubmittingSkip) return;
+
     const reasonLabel =
       reason === "other"
         ? otherReason
@@ -248,10 +252,53 @@ export default function ReadingEntryScreen() {
       Alert.alert("تنبيه", "يرجى إدخال السبب");
       return;
     }
-    setShowSkipModal(false);
 
-    let latitude: number | undefined;
-    let longitude: number | undefined;
+    setIsSubmittingSkip(true);
+
+    // Capture photo if available even for other skip reasons
+    let latitudeValue: number | undefined;
+    let longitudeValue: number | undefined;
+    let permanentPhotoUri = null;
+    let photoFileName = null;
+
+    if (photoUri) {
+      // If a photo was taken, we MUST save it
+      const timestamp = Date.now();
+      const safeAccountNumber = meter.accountNumber.replace(/[^a-zA-Z0-9]/g, "_");
+      const safeSequence = meter.sequence.replace(/[^a-zA-Z0-9]/g, "_");
+      photoFileName = `${safeAccountNumber}_${safeSequence}_${timestamp}.jpg`;
+
+      try {
+        const fs = ExpoFileSystem as any;
+        const photosDir = `${fs.documentDirectory}photos/`;
+        const dirInfo = await fs.getInfoAsync(photosDir);
+        if (!dirInfo.exists) {
+          await fs.makeDirectoryAsync(photosDir, { intermediates: true });
+        }
+        const newPath = `${photosDir}${photoFileName}`;
+        await fs.copyAsync({ from: photoUri, to: newPath });
+        permanentPhotoUri = newPath;
+        
+        // Save to Gallery in background
+        savePhotoToGallery(permanentPhotoUri, photoFileName).catch(console.error);
+      } catch (error) {
+        console.error("Error saving skip-reason photo:", error);
+      }
+    }
+
+    // New logic: require photo for demolished or abandoned
+    if ((reason === "demolished" || reason === "abandoned") && !photoUri) {
+      setIsSubmittingSkip(false);
+      setShowSkipModal(false);
+      Alert.alert(
+        "تنبيه", 
+        `حالة ${reason === "demolished" ? "المهدوم" : "المتروك"} تتطلب التقاط صورة. يرجى التقاط صورة أولاً.`,
+        [{ text: "حسناً", onPress: () => handleTakePhoto() }]
+      );
+      return;
+    }
+
+    setShowSkipModal(false);
 
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -259,8 +306,8 @@ export default function ReadingEntryScreen() {
         const location = await Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.High,
         });
-        latitude = location.coords.latitude;
-        longitude = location.coords.longitude;
+        latitudeValue = location.coords.latitude;
+        longitudeValue = location.coords.longitude;
       }
     } catch (error) {
       console.log("Could not get location:", error);
@@ -272,12 +319,12 @@ export default function ReadingEntryScreen() {
       meter.id,
       meter.readerId || "",
       null,
-      null,
-      null,
+      permanentPhotoUri,
+      photoFileName,
       undefined,
       reasonLabel,
-      latitude,
-      longitude,
+      latitudeValue,
+      longitudeValue,
     );
 
     if (savedLocally) {
@@ -297,12 +344,13 @@ export default function ReadingEntryScreen() {
                       readingDate: new Date().toISOString(),
                       meterId: meter.id,
                       readerId: meter.readerId,
-                      photoPath: null,
+                      photoPath: photoFileName,
+                      localPhotoUri: permanentPhotoUri, // CRITICAL: Ensure this is updated
                       notes: null,
                       skipReason: reasonLabel,
                       isCompleted: true,
-                      latitude: latitude?.toString() || null,
-                      longitude: longitude?.toString() || null,
+                      latitude: latitudeValue?.toString() || null,
+                      longitude: longitudeValue?.toString() || null,
                     },
                   }
                 : m,
@@ -312,12 +360,10 @@ export default function ReadingEntryScreen() {
         },
       );
 
-      Alert.alert(
-        "تم الحفظ محلياً",
-        "تم حفظ سبب التخطي محلياً وسيتم مزامنته لاحقاً عند الضغط على زر المزامنة.",
-        [{ text: "حسناً", onPress: () => goToNextMeter() }],
-      );
+      setIsSubmittingSkip(false);
+      goToNextMeter();
     } else {
+      setIsSubmittingSkip(false);
       Alert.alert("خطأ", "فشل الحفظ محلياً.");
     }
   };
@@ -365,7 +411,7 @@ export default function ReadingEntryScreen() {
   const handleCapture = async () => {
     if (cameraRef) {
       const photo = await cameraRef.takePictureAsync({
-        quality: 0.8,
+        quality: 0.5,
       });
       if (photo) {
         setPhotoUri(photo.uri);
@@ -386,16 +432,20 @@ export default function ReadingEntryScreen() {
         return true;
       }
 
-      if (!mediaLibraryPermission?.granted) {
-        const { granted } = await requestMediaLibraryPermission();
+      // Quick check before asking
+      const currentPermissions = await MediaLibrary.getPermissionsAsync();
+      if (!currentPermissions.granted && currentPermissions.canAskAgain) {
+        const { granted } = await MediaLibrary.requestPermissionsAsync();
         if (!granted) {
           console.log("Media library permission not granted");
           return false;
         }
+      } else if (!currentPermissions.granted) {
+          console.log("Media library permission not granted and cannot ask again");
+          return false;
       }
 
-      // بما أننا نستخدم المسار الدائم الذي يحمل الاسم الصحيح، لا داعي لإنشاء نسخة مؤقتة
-      // حفظ الصورة في معرض الجهاز
+      // Move creation to async background
       const asset = await MediaLibrary.createAssetAsync(uri);
 
       const albumName = "قراءات الكهرباء";
@@ -439,8 +489,18 @@ export default function ReadingEntryScreen() {
 
     if (readingValue < meter.previousReading) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      Alert.alert("تنبيه", "لا يمكن إدخال قراءة أقل من القراءة السابقة");
-      return;
+      const confirmRollover = await new Promise((resolve) => {
+        Alert.alert(
+          "تنبيه: قراءة أقل من السابقة",
+          "القراءة المدخلة أقل من السابقة. هل أكمل المقياس دورة كاملة؟",
+          [
+            { text: "إلغاء", onPress: () => resolve(false), style: "cancel" },
+            { text: "نعم، أكمل دورة", onPress: () => resolve(true) }
+          ]
+        );
+      });
+      
+      if (!confirmRollover) return;
     }
 
     setIsSaving(true);
@@ -578,6 +638,7 @@ export default function ReadingEntryScreen() {
           ref={(ref) => setCameraRef(ref)}
           style={styles.camera}
           facing="back"
+          zoom={zoom}
         />
         {/* Overlay content positioned absolutely */}
         <View style={styles.cameraOverlay} pointerEvents="box-none">
@@ -588,6 +649,15 @@ export default function ReadingEntryScreen() {
             >
               <Feather name="x" size={28} color="#FFFFFF" />
             </Pressable>
+            
+            <View style={styles.zoomContainer}>
+              <Pressable onPress={() => setZoom(Math.min(zoom + 0.1, 1))}>
+                <Feather name="plus-circle" size={32} color="#FFFFFF" />
+              </Pressable>
+              <Pressable onPress={() => setZoom(Math.max(zoom - 0.1, 0))}>
+                <Feather name="minus-circle" size={32} color="#FFFFFF" />
+              </Pressable>
+            </View>
           </View>
           <View style={styles.cameraFooter}>
             <Pressable onPress={handleCapture} style={styles.captureButton}>
@@ -1013,23 +1083,31 @@ export default function ReadingEntryScreen() {
                   onPress={() =>
                     reason.id !== "other" && handleSkipWithReason(reason.id)
                   }
+                  disabled={isSubmittingSkip}
                   style={[
                     styles.reasonButton,
                     {
                       backgroundColor: theme.backgroundSecondary,
                       borderColor: theme.border,
+                      opacity: isSubmittingSkip ? 0.7 : 1,
                     },
                   ]}
                 >
-                  <ThemedText style={styles.reasonText}>
-                    {reason.label}
-                  </ThemedText>
-                  {reason.id !== "other" && (
-                    <Feather
-                      name="chevron-left"
-                      size={20}
-                      color={theme.textSecondary}
-                    />
+                  {isSubmittingSkip && reason.id !== "other" ? (
+                    <ActivityIndicator size="small" color={AppColors.primary} />
+                  ) : (
+                    <>
+                      <ThemedText style={styles.reasonText}>
+                        {reason.label}
+                      </ThemedText>
+                      {reason.id !== "other" && (
+                        <Feather
+                          name="chevron-left"
+                          size={20}
+                          color={theme.textSecondary}
+                        />
+                      )}
+                    </>
                   )}
                 </Pressable>
               ))}
@@ -1053,12 +1131,17 @@ export default function ReadingEntryScreen() {
               {otherReason.trim().length > 0 ? (
                 <Pressable
                   onPress={() => handleSkipWithReason("other")}
+                  disabled={isSubmittingSkip}
                   style={[
                     styles.submitOtherButton,
-                    { backgroundColor: AppColors.accent },
+                    { backgroundColor: AppColors.accent, opacity: isSubmittingSkip ? 0.7 : 1 },
                   ]}
                 >
-                  <ThemedText style={styles.submitOtherText}>إرسال</ThemedText>
+                  {isSubmittingSkip ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <ThemedText style={styles.submitOtherText}>إرسال</ThemedText>
+                  )}
                 </Pressable>
               ) : null}
             </View>
@@ -1438,6 +1521,14 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.5)",
     alignItems: "center",
     justifyContent: "center",
+  },
+  zoomContainer: {
+    marginLeft: "auto",
+    flexDirection: "row",
+    gap: Spacing.lg,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    padding: Spacing.sm,
+    borderRadius: BorderRadius.full || 25,
   },
   cameraFooter: {
     alignItems: "center",

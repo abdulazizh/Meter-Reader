@@ -981,14 +981,14 @@
         <input type="file" id="import-file" accept=".json,.csv,.xlsx,.xls,.mdb,.accdb" onchange="handleFileSelect(event)">
         <div class="upload-icon">📁</div>
         <div class="upload-text">اضغط لاختيار ملف أو اسحب الملف هنا</div>
-        <div class="upload-hint">يدعم ملفات JSON و CSV و Excel</div>
+        <div class="upload-hint">يدعم ملفات JSON و CSV و Excel (.xlsx, .xls) و Access (.mdb)</div>
       </div>
-      <div style="margin-top: 15px; display: flex; gap: 10px;">
+      <div style="margin-top: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
         <button class="btn btn-secondary" onclick="downloadTemplate('readers')">
-          تحميل قالب القراء
+          <span style="font-size: 18px;">📋</span> تحميل قالب القراء (Excel)
         </button>
         <button class="btn btn-secondary" onclick="downloadTemplate('meters')">
-          تحميل قالب المشتركين
+          <span style="font-size: 18px;">📊</span> تحميل قالب المشتركين (Excel)
         </button>
       </div>
       <div id="import-preview" style="margin-top: 20px; display: none;">

@@ -2,6 +2,7 @@ import React, { useState, useCallback, useEffect, useRef, useMemo } from "react"
 import {
   View,
   FlatList,
+  ScrollView,
   StyleSheet,
   TextInput,
   RefreshControl,
@@ -40,6 +41,15 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { clearLocalDB, saveMeterToLocalDB, getMetersFromLocalDB, getPendingReadingsFromDB, markReadingAsSynced } from "@/lib/local-db";
 
 const LOCAL_ASSIGNMENT_VERSION_KEY = "@assignment_version";
+const ITEMS_PER_PAGE = 50;
+
+interface PaginatedMetersResult {
+  meters: MeterWithReading[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -209,17 +219,45 @@ export default function MetersListScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { reader } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [pendingReadings, setPendingReadings] = useState<PendingReading[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<"all" | "completed" | "pending" | "unsynced" | "closed" | "broken" | "not_found" | "demolished" | "abandoned" | "other">("all");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+  const [currentPage, setCurrentPage] = useState(1);
 
   const readerId = reader?.id || null;
   const [localMeters, setLocalMeters] = useState<MeterWithReading[]>([]);
 
-  const { data: apiMeters, isLoading: isApiLoading, refetch } = useQuery<MeterWithReading[]>({
-    queryKey: ["/api/meters", readerId],
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery.trim());
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearch, statusFilter]);
+
+  const { data: apiData, isLoading: isApiLoading, refetch } = useQuery<PaginatedMetersResult>({
+    queryKey: ["apiMeters", readerId, currentPage, ITEMS_PER_PAGE, debouncedSearch, sortOrder],
     enabled: !!readerId,
+    queryFn: async () => {
+      const baseUrl = await getApiUrl();
+      const url = new URL(`/api/meters/${readerId}`, baseUrl);
+      url.searchParams.set("page", String(currentPage));
+      url.searchParams.set("limit", String(ITEMS_PER_PAGE));
+      if (debouncedSearch) url.searchParams.set("search", debouncedSearch);
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
+      return res.json();
+    },
   });
+  const apiMeters = apiData?.meters;
+  const totalPages = apiData?.totalPages ?? 1;
+  const totalMeters = apiData?.total ?? localMeters.length;
 
   // Load from local DB on mount or when readerId changes
   const loadFromLocalDB = useCallback(() => {
@@ -253,7 +291,7 @@ export default function MetersListScreen() {
 
   const isLoading = isApiLoading && localMeters.length === 0;
 
-  // Merge meters with pending readings for immediate UI feedback
+  // Merge current-page meters with pending readings for immediate UI feedback
   const combinedMeters = useMemo(() => {
     const baseMeters = (apiMeters && apiMeters.length > 0) ? apiMeters : localMeters;
     
@@ -292,17 +330,43 @@ export default function MetersListScreen() {
     });
   }, [apiMeters, localMeters, pendingReadings]);
 
+  // Client-side status/type filtering on the current page (search already handled on server)
   const filteredMeters = useMemo(() => {
-    const query = searchQuery.toLowerCase();
-    return combinedMeters.filter((meter) => {
-      return (
-        meter.accountNumber.toLowerCase().includes(query) ||
-        meter.sequence.toLowerCase().includes(query) ||
-        meter.meterNumber.toLowerCase().includes(query) ||
-        meter.subscriberName.toLowerCase().includes(query)
-      );
+    const result = combinedMeters.filter(meter => {
+      const isCompleted = meter.latestReading !== null && meter.latestReading !== undefined;
+      const isSynced = meter.latestReading?.synced !== false;
+      const skipReason = meter.latestReading?.skipReason;
+
+      if (statusFilter === "all") return true;
+      if (statusFilter === "completed") return isCompleted;
+      if (statusFilter === "pending") return !isCompleted;
+      if (statusFilter === "unsynced") return isCompleted && !isSynced;
+      
+      // Match specific skip reasons
+      if (["closed", "broken", "not_found", "demolished", "abandoned", "other"].includes(statusFilter)) {
+        const reasonLabelMap: Record<string, string> = {
+          "closed": "مغلق",
+          "broken": "عاطل",
+          "not_found": "غير موجود",
+          "demolished": "مهدوم",
+          "abandoned": "متروك",
+          "other": "سبب آخر"
+        };
+        return skipReason === reasonLabelMap[statusFilter] || skipReason === statusFilter;
+      }
+      
+      return true;
     });
-  }, [combinedMeters, searchQuery]);
+
+    // Sort by account number
+    return result.sort((a, b) => {
+      if (sortOrder === "asc") {
+        return a.accountNumber.localeCompare(b.accountNumber, undefined, { numeric: true });
+      } else {
+        return b.accountNumber.localeCompare(a.accountNumber, undefined, { numeric: true });
+      }
+    });
+  }, [combinedMeters, statusFilter, sortOrder]);
 
   const completedCount = useMemo(() => {
     return combinedMeters.filter(
@@ -404,6 +468,12 @@ export default function MetersListScreen() {
             ) : null}
           </View>
           <Pressable
+            onPress={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
+            style={[styles.settingsButton, { backgroundColor: theme.backgroundDefault }]}
+          >
+            <Feather name={sortOrder === "asc" ? "arrow-up" : "arrow-down"} size={22} color={AppColors.primary} />
+          </Pressable>
+          <Pressable
             onPress={handleSettingsPress}
             style={[styles.settingsButton, { backgroundColor: theme.backgroundDefault }]}
             testID="button-settings"
@@ -412,13 +482,102 @@ export default function MetersListScreen() {
           </Pressable>
         </View>
 
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.filterContainer}
+          contentContainerStyle={styles.filterContent}
+        >
+          <Pressable
+            onPress={() => setStatusFilter("all")}
+            style={[
+              styles.filterChip,
+              statusFilter === "all" && { backgroundColor: AppColors.primary, borderColor: AppColors.primary }
+            ]}
+          >
+            <ThemedText style={[styles.filterChipText, statusFilter === "all" && { color: "#FFFFFF" }]}>الكل</ThemedText>
+          </Pressable>
+          <Pressable
+            onPress={() => setStatusFilter("pending")}
+            style={[
+              styles.filterChip,
+              statusFilter === "pending" && { backgroundColor: AppColors.primary, borderColor: AppColors.primary }
+            ]}
+          >
+            <ThemedText style={[styles.filterChipText, statusFilter === "pending" && { color: "#FFFFFF" }]}>غير مقروء</ThemedText>
+          </Pressable>
+          <Pressable
+            onPress={() => setStatusFilter("completed")}
+            style={[
+              styles.filterChip,
+              statusFilter === "completed" && { backgroundColor: AppColors.primary, borderColor: AppColors.primary }
+            ]}
+          >
+            <ThemedText style={[styles.filterChipText, statusFilter === "completed" && { color: "#FFFFFF" }]}>مقروء</ThemedText>
+          </Pressable>
+          <Pressable
+            onPress={() => setStatusFilter("unsynced")}
+            style={[
+              styles.filterChip,
+              statusFilter === "unsynced" && { backgroundColor: AppColors.primary, borderColor: AppColors.primary }
+            ]}
+          >
+            <ThemedText style={[styles.filterChipText, statusFilter === "unsynced" && { color: "#FFFFFF" }]}>بانتظار المزامنة</ThemedText>
+          </Pressable>
+          <Pressable
+            onPress={() => setStatusFilter("closed")}
+            style={[
+              styles.filterChip,
+              statusFilter === "closed" && { backgroundColor: AppColors.primary, borderColor: AppColors.primary }
+            ]}
+          >
+            <ThemedText style={[styles.filterChipText, statusFilter === "closed" && { color: "#FFFFFF" }]}>مغلق</ThemedText>
+          </Pressable>
+          <Pressable
+            onPress={() => setStatusFilter("broken")}
+            style={[
+              styles.filterChip,
+              statusFilter === "broken" && { backgroundColor: AppColors.primary, borderColor: AppColors.primary }
+            ]}
+          >
+            <ThemedText style={[styles.filterChipText, statusFilter === "broken" && { color: "#FFFFFF" }]}>عاطل</ThemedText>
+          </Pressable>
+          <Pressable
+            onPress={() => setStatusFilter("not_found")}
+            style={[
+              styles.filterChip,
+              statusFilter === "not_found" && { backgroundColor: AppColors.primary, borderColor: AppColors.primary }
+            ]}
+          >
+            <ThemedText style={[styles.filterChipText, statusFilter === "not_found" && { color: "#FFFFFF" }]}>غير موجود</ThemedText>
+          </Pressable>
+          <Pressable
+            onPress={() => setStatusFilter("demolished")}
+            style={[
+              styles.filterChip,
+              statusFilter === "demolished" && { backgroundColor: AppColors.primary, borderColor: AppColors.primary }
+            ]}
+          >
+            <ThemedText style={[styles.filterChipText, statusFilter === "demolished" && { color: "#FFFFFF" }]}>مهدوم</ThemedText>
+          </Pressable>
+          <Pressable
+            onPress={() => setStatusFilter("abandoned")}
+            style={[
+              styles.filterChip,
+              statusFilter === "abandoned" && { backgroundColor: AppColors.primary, borderColor: AppColors.primary }
+            ]}
+          >
+            <ThemedText style={[styles.filterChipText, statusFilter === "abandoned" && { color: "#FFFFFF" }]}>متروك</ThemedText>
+          </Pressable>
+        </ScrollView>
+
         <View style={[styles.progressBar, { backgroundColor: theme.backgroundSecondary }]}>
           <View style={styles.progressInfo}>
             <ThemedText style={styles.progressText}>
               التقدم
             </ThemedText>
             <ThemedText style={[styles.progressCount, { color: AppColors.primary }]}>
-              {completedCount}/{combinedMeters.length} مكتملة
+              {completedCount}/{combinedMeters.length} في هذه الصفحة
             </ThemedText>
           </View>
           <View style={[styles.progressTrack, { backgroundColor: theme.border }]}>
@@ -481,6 +640,41 @@ export default function MetersListScreen() {
           }
           ListEmptyComponent={<EmptyState />}
           ItemSeparatorComponent={() => <View style={styles.separator} />}
+          ListFooterComponent={
+            totalPages > 1 ? (
+              <View style={styles.paginationContainer}>
+                <Pressable
+                  onPress={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage <= 1}
+                  style={[
+                    styles.paginationButton,
+                    { backgroundColor: theme.backgroundDefault, borderColor: theme.border },
+                    currentPage <= 1 && styles.paginationButtonDisabled,
+                  ]}
+                  testID="button-prev"
+                >
+                  <Feather name="chevron-right" size={20} color={currentPage <= 1 ? theme.textSecondary : AppColors.primary} />
+                  <ThemedText style={[styles.paginationButtonText, { color: currentPage <= 1 ? theme.textSecondary : AppColors.primary }]}>السابق</ThemedText>
+                </Pressable>
+                <ThemedText style={[styles.paginationInfo, { color: theme.textSecondary }]}>
+                  صفحة {currentPage} من {totalPages}
+                </ThemedText>
+                <Pressable
+                  onPress={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage >= totalPages}
+                  style={[
+                    styles.paginationButton,
+                    { backgroundColor: theme.backgroundDefault, borderColor: theme.border },
+                    currentPage >= totalPages && styles.paginationButtonDisabled,
+                  ]}
+                  testID="button-next"
+                >
+                  <ThemedText style={[styles.paginationButtonText, { color: currentPage >= totalPages ? theme.textSecondary : AppColors.primary }]}>التالي</ThemedText>
+                  <Feather name="chevron-left" size={20} color={currentPage >= totalPages ? theme.textSecondary : AppColors.primary} />
+                </Pressable>
+              </View>
+            ) : null
+          }
         />
       )}
     </View>
@@ -523,6 +717,30 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.md,
     alignItems: "center",
     justifyContent: "center",
+  },
+  filterContainer: {
+    marginTop: Spacing.md,
+    maxHeight: 50,
+  },
+  filterContent: {
+    paddingRight: 0,
+    flexDirection: "row-reverse",
+    gap: Spacing.sm,
+  },
+  filterChip: {
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: AppColors.primary,
+    backgroundColor: "transparent",
+    minWidth: 80,
+    alignItems: "center",
+  },
+  filterChipText: {
+    fontSize: 14,
+    fontFamily: "Cairo_600SemiBold",
+    color: AppColors.primary,
   },
   progressBar: {
     marginTop: Spacing.lg,
@@ -704,5 +922,34 @@ const styles = StyleSheet.create({
   },
   syncingIcon: {
     // We could add an animation here if we wanted
-  }
+  },
+  paginationContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.lg,
+    paddingVertical: Spacing.xl,
+  },
+  paginationButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.xs,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    minWidth: 90,
+  },
+  paginationButtonDisabled: {
+    opacity: 0.4,
+  },
+  paginationButtonText: {
+    fontSize: 14,
+    fontFamily: "Cairo_600SemiBold",
+  },
+  paginationInfo: {
+    fontSize: 14,
+    fontFamily: "Cairo_600SemiBold",
+  },
 });

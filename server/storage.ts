@@ -12,7 +12,15 @@ import {
   categories,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, sql } from "drizzle-orm";
+import { eq, desc, and, or, ilike, sql, count } from "drizzle-orm";
+
+export interface PaginatedMetersResult {
+  meters: MeterWithReading[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
 
 export interface IStorage {
   getReader(id: string): Promise<Reader | undefined>;
@@ -20,6 +28,7 @@ export interface IStorage {
   createReader(reader: InsertReader): Promise<Reader>;
   
   getMetersByReaderId(readerId: string): Promise<MeterWithReading[]>;
+  getMetersByReaderIdPaginated(readerId: string, page: number, limit: number, search?: string): Promise<PaginatedMetersResult>;
   getMeterById(id: string): Promise<Meter | undefined>;
   createMeter(meter: InsertMeter): Promise<Meter>;
   
@@ -82,6 +91,71 @@ export class DatabaseStorage implements IStorage {
       ...row.meter,
       latestReading: row.reading || null,
     }));
+  }
+
+  private buildMeterSearchCondition(search?: string) {
+    if (!search) return undefined;
+    const term = `%${search}%`;
+    return or(
+      ilike(meters.accountNumber, term),
+      ilike(meters.sequence, term),
+      ilike(meters.meterNumber, term),
+      ilike(meters.subscriberName, term)
+    );
+  }
+
+  async getMetersByReaderIdPaginated(
+    readerId: string,
+    page: number,
+    limit: number,
+    search?: string
+  ): Promise<PaginatedMetersResult> {
+    const where = and(
+      eq(meters.readerId, readerId),
+      this.buildMeterSearchCondition(search)
+    );
+
+    const safePage = Math.max(1, page);
+    const safeLimit = Math.min(100, Math.max(1, limit));
+
+    const [{ value: total }] = await db
+      .select({ value: count() })
+      .from(meters)
+      .where(where);
+
+    const rows = await db
+      .select({
+        meter: meters,
+        reading: readings,
+      })
+      .from(meters)
+      .leftJoin(
+        readings,
+        and(
+          eq(meters.id, readings.meterId),
+          sql`${readings.id} = (
+            SELECT id FROM ${readings} 
+            WHERE meter_id = ${meters.id} 
+            ORDER BY created_at DESC 
+            LIMIT 1
+          )`
+        )
+      )
+      .where(where)
+      .orderBy(meters.sequence)
+      .limit(safeLimit)
+      .offset((safePage - 1) * safeLimit);
+
+    return {
+      meters: rows.map((row) => ({
+        ...row.meter,
+        latestReading: row.reading || null,
+      })),
+      total,
+      page: safePage,
+      limit: safeLimit,
+      totalPages: Math.ceil(total / safeLimit),
+    };
   }
 
   async getMeterById(id: string): Promise<Meter | undefined> {

@@ -556,6 +556,20 @@ export function registerAdminRoutes(app: Express) {
       if (!Array.isArray(jsonData)) {
         return res.status(400).json({ error: "Data must be in tabular format" });
       }
+
+      // Helper to find value by multiple possible keys (case-insensitive and Arabic support)
+      const getValue = (item: any, possibleKeys: string[]) => {
+        const itemKeys = Object.keys(item);
+        for (const key of possibleKeys) {
+          // Exact match
+          if (item[key] !== undefined) return item[key];
+          
+          // Case-insensitive or trimmed match
+          const foundKey = itemKeys.find(k => k.trim().toLowerCase() === key.toLowerCase());
+          if (foundKey) return item[foundKey];
+        }
+        return undefined;
+      };
       
       // Process the data based on type
       let count = 0;
@@ -563,50 +577,69 @@ export function registerAdminRoutes(app: Express) {
       if (type === "readers") {
         const insertReaders = [];
         for (const item of jsonData) {
-          insertReaders.push({
-            username: item['اسم المستخدم'] || item['username'],
-            password: item['كلمة المرور'] || item['password'] || "123456",
-            displayName: item['الاسم الظاهر'] || item['displayName'] || item['username'] || item['اسم المستخدم'] || '',
-          });
-          count++;
+          const username = getValue(item, ['اسم المستخدم', 'username', 'O_name', 'user_name']);
+          const displayName = getValue(item, ['الاسم الظاهر', 'displayName', 'display_name', 'name', 'اسم']);
+          const password = getValue(item, ['كلمة المرور', 'password', 'pass']) || "123456";
+
+          if (username) {
+            insertReaders.push({
+              username: String(username),
+              password: String(password),
+              displayName: String(displayName || username),
+            });
+            count++;
+          }
         }
         await storage.bulkCreateReaders(insertReaders);
       } else if (type === "meters") {
         const insertMeters = [];
         for (const item of jsonData) {
-          // Extract values with fallbacks
-          const accountNumber = item['رقم الحساب'] || item['accountNumber'];
-          const subscriberName = item['اسم المشترك'] || item['subscriberName'];
-          const meterNumber = item['رقم المقياس'] || item['meterNumber'];
+          // Extract values with multiple fallback keys
+          const accountNumber = getValue(item, ['رقم الحساب', 'accountNumber', 'm_accountno', 'acc_no', 'account_no']);
+          const subscriberName = getValue(item, ['اسم المشترك', 'subscriberName', 'm_name', 'name', 'اسم']);
+          const meterNumber = getValue(item, ['رقم المقياس', 'meterNumber', 'm_meter', 'meter_no', 'meter_id']);
           
           // Validate required fields
           if (!accountNumber) {
-            return res.status(400).json({ error: `Missing required field 'accountNumber' for meter at index ${count}` });
+            return res.status(400).json({ error: `Missing required field 'accountNumber' for meter at row ${count + 2}. Expected headers: رقم الحساب, accountNumber, or m_accountno.` });
           }
           if (!subscriberName) {
-            return res.status(400).json({ error: `Missing required field 'subscriberName' for meter at index ${count}` });
+            return res.status(400).json({ error: `Missing required field 'subscriberName' for meter at row ${count + 2}. Expected headers: اسم المشترك, subscriberName, or m_name.` });
           }
           if (!meterNumber) {
-            return res.status(400).json({ error: `Missing required field 'meterNumber' for meter at index ${count}` });
+            return res.status(400).json({ error: `Missing required field 'meterNumber' for meter at row ${count + 2}. Expected headers: رقم المقياس, meterNumber, or m_meter.` });
           }
           
-          const readerId = item['معرف القارئ'] || item['readerId'];
-          if (readerId) readerIdsToUpdate.add(readerId);
+          const readerId = getValue(item, ['معرف القارئ', 'readerId', 'reader_id']);
+          if (readerId) readerIdsToUpdate.add(String(readerId));
+
+          const sequence = getValue(item, ['تسلسل', 'sequence', 'm_serial', 'seq']);
+          const category = getValue(item, ['الصنف', 'category', 'm_type', 'm_cust', 'type']);
+          const address = getValue(item, ['العنوان', 'address', 'm_address', 'addr']);
+          const record = getValue(item, ['السجل', 'record', 'm_sect', 'm_streetno', 'sect']);
+          const block = getValue(item, ['البلوك', 'block', 'm_street_no', 'o_sect', 'block_no']);
+          const property = getValue(item, ['العقار', 'property', 'm_houseno', 'prop']);
+          const prevReading = getValue(item, ['القراءة السابقة', 'previousReading', 'm_prevread', 'old_reading']);
+          const prevDate = getValue(item, ['تاريخ القراءة السابقة', 'previousReadingDate', 'm_prevdt', 'date']);
+          const currentAmount = getValue(item, ['المبلغ الحالي', 'currentAmount', 'm_amount', 'amount']);
+          const debts = getValue(item, ['الديون', 'debts', 'm_prevouts', 'm_outs', 'debt']);
+          const totalAmount = getValue(item, ['المجموع', 'totalAmount', 'm_amount_all', 'total']);
+
           insertMeters.push({
-            accountNumber: accountNumber,
-            sequence: item['تسلسل'] || item['sequence'] || "001",
-            meterNumber: meterNumber,
-            category: item['الصنف'] || item['category'] || "سكني",
-            subscriberName: subscriberName,
-            address: item['العنوان'] || item['address'] || "",
-            record: item['السجل'] || item['record'] || "1",
-            block: item['البلوك'] || item['block'] || "1",
-            property: item['العقار'] || item['property'] || "1",
-            previousReading: parseInt(item['القراءة السابقة'] || item['previousReading']) || 0,
-            previousReadingDate: item['تاريخ القراءة السابقة'] || item['previousReadingDate'] ? new Date(item['تاريخ القراءة السابقة'] || item['previousReadingDate']) : new Date(),
-            currentAmount: item['المبلغ الحالي'] || item['currentAmount'] || "0",
-            debts: item['الديون'] || item['debts'] || "0",
-            totalAmount: item['المجموع'] || item['totalAmount'] || "0",
+            accountNumber: String(accountNumber),
+            sequence: String(sequence || "001"),
+            meterNumber: String(meterNumber),
+            category: String(category || "سكني"),
+            subscriberName: String(subscriberName),
+            address: String(address || ""),
+            record: String(record || "1"),
+            block: String(block || "1"),
+            property: String(property || "1"),
+            previousReading: parseInt(String(prevReading)) || 0,
+            previousReadingDate: prevDate ? new Date(String(prevDate)) : new Date(),
+            currentAmount: String(currentAmount || "0"),
+            debts: String(debts || "0"),
+            totalAmount: String(totalAmount || "0"),
             readerId: readerId && String(readerId).trim() !== "" ? String(readerId) : null,
           });
           count++;

@@ -71,8 +71,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/meters/:readerId", async (req, res) => {
     try {
       const { readerId } = req.params;
-      const meters = await storage.getMetersByReaderId(readerId);
-      res.json(meters);
+      const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
+      const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string, 10) || 50));
+      const search = (req.query.search as string)?.trim() || undefined;
+      const result = await storage.getMetersByReaderIdPaginated(readerId, page, limit, search);
+      res.json(result);
     } catch (error) {
       console.error("Error fetching meters:", error);
       res.status(500).json({ error: "Failed to fetch meters" });
