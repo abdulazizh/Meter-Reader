@@ -133,7 +133,8 @@ export function registerAdminRoutes(app: Express) {
       const readersWithCounts = await Promise.all(
         readers.map(async (reader) => {
           const meters = await storage.getMetersByReaderId(reader.id);
-          return { ...reader, meterCount: meters.length };
+          const readingsList = await storage.getAllReadingsByReaderId(reader.id);
+          return { ...reader, meterCount: meters.length, readingCount: readingsList.length };
         })
       );
       res.json(readersWithCounts);
@@ -182,6 +183,17 @@ export function registerAdminRoutes(app: Express) {
     } catch (error) {
       console.error("Error deleting reader:", error);
       res.status(500).json({ error: "Failed to delete reader" });
+    }
+  });
+
+  app.post("/api/admin/readers/:id/unassign", requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.unassignMeters(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error unassigning meters:", error);
+      res.status(500).json({ error: "Failed to unassign meters" });
     }
   });
 

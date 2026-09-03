@@ -263,6 +263,10 @@ export class DatabaseStorage implements IStorage {
     await db.delete(readers).where(eq(readers.id, id));
   }
 
+  async unassignMeters(readerId: string): Promise<void> {
+    await db.update(meters).set({ readerId: null }).where(eq(meters.readerId, readerId));
+  }
+
   async getAllMeters(): Promise<MeterWithReading[]> {
     const rows = await db
       .select({

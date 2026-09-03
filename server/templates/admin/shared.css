@@ -121,6 +121,8 @@ body {
 .btn-danger:hover { background: #c82333; }
 .btn-secondary { background: #6c757d; color: white; }
 .btn-secondary:hover { background: #5a6268; }
+.btn-warning { background: #f0ad4e; color: white; }
+.btn-warning:hover { background: #ec971f; }
 .btn-sm { padding: 6px 12px; font-size: 12px; }
 
 table { width: 100%; border-collapse: collapse; margin-top: 15px; }

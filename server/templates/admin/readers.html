@@ -111,6 +111,7 @@
           <td>${reader.meterCount || 0}</td>
           <td class="actions">
             <button class="btn btn-sm btn-secondary" onclick="editReader('${reader.id}')">تعديل</button>
+            ${(reader.meterCount || 0) > 0 ? `<button class="btn btn-sm btn-warning" onclick="unassignReader('${reader.id}')">إلغاء اسناد</button>` : ''}
             <button class="btn btn-sm btn-danger" onclick="deleteReader('${reader.id}')">حذف</button>
           </td>
         </tr>
@@ -175,6 +176,23 @@
         loadReaders();
       } catch (error) {
         showError('فشل حذف القارئ');
+      }
+    }
+
+    async function unassignReader(id) {
+      const reader = readerList.find(r => r.id === id);
+      if (!reader) return;
+      if (!confirm(`هل تريد إلغاء اسناد ${reader.meterCount || 0} مشترك من ${reader.displayName}؟\nسيصبح المشتركون غير مسندين لقارئ.`)) return;
+      try {
+        const response = await fetch(`/api/admin/readers/${id}/unassign`, {
+          method: 'POST',
+          credentials: 'include'
+        });
+        if (!response.ok) throw new Error();
+        showSuccess('تم إلغاء اسناد المشتركين بنجاح');
+        loadReaders();
+      } catch (error) {
+        showError('فشل إلغاء اسناد المشتركين');
       }
     }
 
