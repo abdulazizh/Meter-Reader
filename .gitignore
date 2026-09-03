@@ -44,4 +44,7 @@ app-example
 # generated native folders
 /ios
 /android
-upload/
+
+# upload folders
+uploads/
+server/uploads/
