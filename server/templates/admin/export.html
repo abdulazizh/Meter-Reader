@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>تصدير البيانات - لوحة تحكم المسؤول</title>
+  <link rel="stylesheet" href="/admin-shared.css">
+</head>
+<body>
+  <header class="header">
+    <h1>لوحة تحكم المسؤول</h1>
+    <div class="header-stats">
+      <button class="logout-btn" onclick="handleLogout()">تسجيل الخروج</button>
+    </div>
+  </header>
+
+  <div class="nav-bar"></div>
+
+  <div class="container">
+    <div class="alert alert-success" id="successAlert"></div>
+    <div class="alert alert-error" id="errorAlert"></div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <h2 class="panel-title">تصدير البيانات</h2>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>نوع البيانات</label>
+          <select id="export-type">
+            <option value="all">جميع البيانات</option>
+            <option value="readers">القراء فقط</option>
+            <option value="meters">المشتركين فقط</option>
+            <option value="readings">القراءات فقط</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>صيغة الملف</label>
+          <select id="export-format">
+            <option value="excel">Excel (موصى به للعربية)</option>
+            <option value="json">JSON</option>
+            <option value="csv">CSV</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>القارئ (اختياري)</label>
+        <select id="export-reader">
+          <option value="">جميع القراء</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" onclick="exportData()">
+        تصدير البيانات
+      </button>
+    </div>
+  </div>
+
+  <script>
+    function buildNav() {
+      document.querySelector('.nav-bar').innerHTML = [
+        '<a class="nav-link" href="/admin/dashboard">الإحصائيات</a>',
+        '<a class="nav-link" href="/admin/readers">القراء</a>',
+        '<a class="nav-link" href="/admin/meters">المشتركين</a>',
+        '<a class="nav-link" href="/admin/readings">القراءات</a>',
+        '<a class="nav-link" href="/admin/import">رفع البيانات</a>',
+        '<a class="nav-link active" href="/admin/export">تصدير البيانات</a>'
+      ].join('');
+    }
+
+    async function loadReadersForExport() {
+      const res = await fetch('/api/admin/readers', { credentials: 'include' });
+      if (res.status === 401) { window.location.href = '/admin/login'; return; }
+      readers = await res.json();
+      updateReaderSelects(['export-reader']);
+    }
+
+    async function exportData() {
+      const type = document.getElementById('export-type').value;
+      const format = document.getElementById('export-format').value;
+      const readerId = document.getElementById('export-reader').value;
+
+      try {
+        if (format === 'excel') {
+          let url = `/api/admin/export-excel/${type}`;
+          if (readerId) url += `?readerId=${readerId}`;
+          const response = await fetch(url);
+          const blob = await response.blob();
+          const link = document.createElement('a');
+          link.href = URL.createObjectURL(blob);
+          link.download = `export_${type}_${Date.now()}.xlsx`;
+          link.click();
+          showSuccess('تم تصدير البيانات بنجاح');
+          return;
+        }
+
+        let url = `/api/admin/export/${type}?format=${format}`;
+        if (readerId) url += `&readerId=${readerId}`;
+        const response = await fetch(url, { credentials: 'include' });
+        const data = await response.json();
+
+        let content, filename, mimeType;
+        if (format === 'json') {
+          content = JSON.stringify(data, null, 2);
+          filename = `export_${type}_${Date.now()}.json`;
+          mimeType = 'application/json;charset=utf-8';
+        } else {
+          content = convertToCSV(data);
+          filename = `export_${type}_${Date.now()}.csv`;
+          mimeType = 'text/csv;charset=utf-8';
+        }
+
+        const BOM = '\uFEFF';
+        const blob = new Blob([BOM + content], { type: mimeType });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = filename;
+        link.click();
+        showSuccess('تم تصدير البيانات بنجاح');
+      } catch (error) {
+        showError('فشل تصدير البيانات');
+      }
+    }
+
+    function convertToCSV(data) {
+      if (!Array.isArray(data) || data.length === 0) return '';
+      const headers = Object.keys(data[0]);
+      const escapeCSV = (val) => {
+        if (val === null || val === undefined) return '';
+        const str = String(val);
+        if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+          return '"' + str.replace(/"/g, '""') + '"';
+        }
+        return str;
+      };
+      const rows = data.map(obj => headers.map(h => escapeCSV(obj[h])).join(','));
+      return [headers.join(','), ...rows].join('\n');
+    }
+
+    buildNav();
+    loadReadersForExport();
+  </script>
+  <script src="/admin-shared.js"></script>
+</body>
+</html>

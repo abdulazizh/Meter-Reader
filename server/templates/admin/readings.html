@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>القراءات - لوحة تحكم المسؤول</title>
+  <link rel="stylesheet" href="/admin-shared.css">
+</head>
+<body>
+  <header class="header">
+    <h1>لوحة تحكم المسؤول</h1>
+    <div class="header-stats">
+      <div class="stat-item">
+        <div class="stat-value" id="totalReadings">0</div>
+        <div class="stat-label">القراءات</div>
+      </div>
+      <button class="logout-btn" onclick="handleLogout()">تسجيل الخروج</button>
+    </div>
+  </header>
+
+  <div class="nav-bar"></div>
+
+  <div class="container">
+    <div class="alert alert-success" id="successAlert"></div>
+    <div class="alert alert-error" id="errorAlert"></div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <h2 class="panel-title">القراءات المسجلة</h2>
+        <div class="actions">
+          <button class="btn btn-danger" onclick="deleteAllReadings()">حذف الكل</button>
+        </div>
+      </div>
+
+      <div class="filters-row">
+        <div class="filter-group">
+          <label>البحث</label>
+          <input type="text" id="readings-search" placeholder="رقم الحساب أو الاسم..." oninput="filterReadings()">
+        </div>
+        <div class="filter-group">
+          <label>القارئ</label>
+          <select id="readings-reader-filter" onchange="filterReadings()">
+            <option value="">جميع القراء</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>النوع</label>
+          <select id="readings-type-filter" onchange="filterReadings()">
+            <option value="">الكل</option>
+            <option value="reading">قراءات</option>
+            <option value="skipped">تم التخطي</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>الصورة</label>
+          <select id="readings-photo-filter" onchange="filterReadings()">
+            <option value="">الكل</option>
+            <option value="has">متوفرة</option>
+            <option value="none">غير متوفرة</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>الموقع</label>
+          <select id="readings-location-filter" onchange="filterReadings()">
+            <option value="">الكل</option>
+            <option value="has">متوفر</option>
+            <option value="none">غير متوفر</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>الشهر</label>
+          <select id="readings-month-filter" onchange="loadReadingsByMonth()">
+            <option value="">كل الشهور</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>من تاريخ</label>
+          <input type="date" id="readings-date-from" onchange="filterReadings()">
+        </div>
+        <div class="filter-group">
+          <label>إلى تاريخ</label>
+          <input type="date" id="readings-date-to" onchange="filterReadings()">
+        </div>
+        <button class="btn-reset-filters" onclick="resetReadingsFilters()">إعادة تعيين</button>
+      </div>
+      <div class="results-count" id="readings-count"></div>
+      <div class="loading" id="readings-loading">
+        <div class="spinner"></div>
+        <div>جاري التحميل...</div>
+      </div>
+      <table id="readings-table">
+        <thead>
+          <tr>
+            <th class="sortable" data-sort="accountNumber">رقم الحساب</th>
+            <th class="sortable" data-sort="subscriberName">اسم المشترك</th>
+            <th class="sortable" data-sort="readerName">القارئ</th>
+            <th class="sortable" data-sort="previousReading">القراءة السابقة</th>
+            <th class="sortable" data-sort="newReading">القراءة الجديدة</th>
+            <th class="sortable" data-sort="difference">الفرق</th>
+            <th>سبب التخطي</th>
+            <th class="sortable" data-sort="readingDate">تاريخ القراءة</th>
+            <th>الموقع</th>
+            <th>الصورة</th>
+            <th>الملاحظات</th>
+            <th>الإجراءات</th>
+          </tr>
+        </thead>
+        <tbody id="readings-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="modal" id="edit-reading-modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>تعديل القراءة</h3>
+        <button class="modal-close" onclick="closeEditReadingModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="edit-reading-id">
+        <div class="form-group">
+          <label>القراءة الجديدة</label>
+          <input type="number" id="edit-reading-value" placeholder="أدخل القراءة">
+        </div>
+        <div class="form-group">
+          <label>سبب التخطي</label>
+          <input type="text" id="edit-reading-skip-reason" placeholder="سبب التخطي (اختياري)">
+        </div>
+        <div class="form-group">
+          <label>الملاحظات</label>
+          <textarea id="edit-reading-notes" rows="3" placeholder="الملاحظات (اختياري)"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeEditReadingModal()">إلغاء</button>
+        <button class="btn btn-primary" onclick="saveReadingEdit()">حفظ التعديلات</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let meters = [];
+    let allReadings = [];
+    let readingsSortField = 'readingDate';
+    let readingsSortDir = 'desc';
+
+    function buildNav() {
+      document.querySelector('.nav-bar').innerHTML = [
+        '<a class="nav-link" href="/admin/dashboard">الإحصائيات</a>',
+        '<a class="nav-link" href="/admin/readers">القراء</a>',
+        '<a class="nav-link" href="/admin/meters">المشتركين</a>',
+        '<a class="nav-link active" href="/admin/readings">القراءات</a>',
+        '<a class="nav-link" href="/admin/import">رفع البيانات</a>',
+        '<a class="nav-link" href="/admin/export">تصدير البيانات</a>'
+      ].join('');
+    }
+
+    async function loadData() {
+      populateMonthFilter();
+      const [readRes, metersRes, readersRes] = await Promise.all([
+        fetch('/api/admin/readings', { credentials: 'include' }),
+        fetch('/api/admin/meters', { credentials: 'include' }),
+        fetch('/api/admin/readers', { credentials: 'include' })
+      ]);
+      if (readRes.status === 401) { window.location.href = '/admin/login'; return; }
+      allReadings = await readRes.json();
+      meters = await metersRes.json();
+      readers = await readersRes.json();
+      document.getElementById('totalReadings').textContent = allReadings.length;
+      updateReaderSelects(['readings-reader-filter']);
+      renderReadings();
+    }
+
+    function renderReadings() {
+      const tbody = document.getElementById('readings-body');
+      const filteredReadings = filterReadingsData();
+      tbody.innerHTML = filteredReadings.map(reading => {
+        const meter = meters.find(m => m.id === reading.meterId);
+        const reader = readers.find(r => r.id === reading.readerId);
+        const readingDate = reading.readingDate ? new Date(reading.readingDate).toLocaleDateString('ar-IQ') : new Date(reading.createdAt).toLocaleDateString('ar-IQ');
+        const readingTime = reading.readingDate ? new Date(reading.readingDate).toLocaleTimeString('ar-IQ', {hour: '2-digit', minute: '2-digit'}) : '';
+        const hasLocation = reading.latitude && reading.longitude;
+        const locationLink = hasLocation ?
+          `<a href="https://www.google.com/maps?q=${reading.latitude},${reading.longitude}" target="_blank" style="color: #1e5799;">عرض الخريطة</a>` :
+          '-';
+        const prevReading = meter?.previousReading || 0;
+        const newReading = reading.newReading || 0;
+        const difference = reading.newReading !== null ? (newReading - prevReading) : '-';
+        const photoLink = reading.photoPath ?
+          `<a href="/api/photo/${reading.photoPath}" target="_blank" class="photo-link" title="عرض الصورة">
+            <span class="badge badge-success">عرض الصورة</span>
+          </a>` :
+          `<span class="badge badge-warning">غير متوفرة</span>`;
+        return `
+          <tr>
+            <td>${meter?.accountNumber || '-'}</td>
+            <td>${meter?.subscriberName || '-'}</td>
+            <td>${reader?.displayName || '-'}</td>
+            <td>${meter?.previousReading?.toLocaleString('ar-IQ') || '-'}</td>
+            <td style="font-weight: bold; color: #28a745">${reading.newReading !== null ? reading.newReading.toLocaleString('ar-IQ') : '-'}</td>
+            <td style="color: ${difference > 0 ? '#1e5799' : '#dc3545'}">${typeof difference === 'number' ? difference.toLocaleString('ar-IQ') : difference}</td>
+            <td>${reading.skipReason ? `<span class="badge badge-warning">${reading.skipReason}</span>` : '-'}</td>
+            <td>${readingDate} ${readingTime}</td>
+            <td>${locationLink}</td>
+            <td>${photoLink}</td>
+            <td>${reading.notes || '-'}</td>
+            <td class="actions">
+              <button class="btn btn-sm btn-secondary" onclick="editReading('${reading.id}')">تعديل</button>
+              <button class="btn btn-sm btn-danger" onclick="deleteReading('${reading.id}')">حذف</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function filterReadingsData() {
+      const search = document.getElementById('readings-search').value.toLowerCase();
+      const readerId = document.getElementById('readings-reader-filter').value;
+      const typeFilter = document.getElementById('readings-type-filter').value;
+      const photoFilter = document.getElementById('readings-photo-filter').value;
+      const locationFilter = document.getElementById('readings-location-filter').value;
+      const dateFrom = document.getElementById('readings-date-from').value;
+      const dateTo = document.getElementById('readings-date-to').value;
+
+      let filtered = allReadings.filter(r => {
+        const meter = meters.find(m => m.id === r.meterId);
+        const matchesSearch = !search ||
+          meter?.accountNumber.toLowerCase().includes(search) ||
+          meter?.subscriberName.toLowerCase().includes(search);
+        const matchesReader = !readerId || r.readerId === readerId;
+        const isSkipped = r.skipReason !== null && r.skipReason !== '';
+        const matchesType = !typeFilter ||
+          (typeFilter === 'reading' && !isSkipped) ||
+          (typeFilter === 'skipped' && isSkipped);
+        const hasPhoto = r.photoPath !== null && r.photoPath !== '';
+        const matchesPhoto = !photoFilter ||
+          (photoFilter === 'has' && hasPhoto) ||
+          (photoFilter === 'none' && !hasPhoto);
+        const hasLocation = r.latitude !== null && r.longitude !== null;
+        const matchesLocation = !locationFilter ||
+          (locationFilter === 'has' && hasLocation) ||
+          (locationFilter === 'none' && !hasLocation);
+        const readingDate = new Date(r.readingDate || r.createdAt);
+        const matchesDateFrom = !dateFrom || readingDate >= new Date(dateFrom);
+        const matchesDateTo = !dateTo || readingDate <= new Date(dateTo + 'T23:59:59');
+        return matchesSearch && matchesReader && matchesType && matchesPhoto && matchesLocation && matchesDateFrom && matchesDateTo;
+      });
+
+      filtered.sort((a, b) => {
+        const meterA = meters.find(m => m.id === a.meterId);
+        const meterB = meters.find(m => m.id === b.meterId);
+        const readerA = readers.find(r => r.id === a.readerId);
+        const readerB = readers.find(r => r.id === b.readerId);
+
+        let valA, valB;
+        switch (readingsSortField) {
+          case 'accountNumber': valA = meterA?.accountNumber || ''; valB = meterB?.accountNumber || ''; break;
+          case 'subscriberName': valA = meterA?.subscriberName || ''; valB = meterB?.subscriberName || ''; break;
+          case 'readerName': valA = readerA?.displayName || ''; valB = readerB?.displayName || ''; break;
+          case 'previousReading': valA = meterA?.previousReading || 0; valB = meterB?.previousReading || 0; break;
+          case 'newReading': valA = a.newReading || 0; valB = b.newReading || 0; break;
+          case 'difference':
+            valA = a.newReading !== null ? (a.newReading - (meterA?.previousReading || 0)) : 0;
+            valB = b.newReading !== null ? (b.newReading - (meterB?.previousReading || 0)) : 0;
+            break;
+          case 'readingDate': valA = new Date(a.readingDate || a.createdAt); valB = new Date(b.readingDate || b.createdAt); break;
+          default: valA = a[readingsSortField]; valB = b[readingsSortField];
+        }
+        if (typeof valA === 'string') valA = valA.toLowerCase();
+        if (typeof valB === 'string') valB = valB.toLowerCase();
+        if (valA < valB) return readingsSortDir === 'asc' ? -1 : 1;
+        if (valA > valB) return readingsSortDir === 'asc' ? 1 : -1;
+        return 0;
+      });
+
+      document.getElementById('readings-count').textContent = `عرض ${filtered.length} من ${allReadings.length} قراءة`;
+      return filtered;
+    }
+
+    function filterReadings() { renderReadings(); }
+
+    function resetReadingsFilters() {
+      document.getElementById('readings-search').value = '';
+      document.getElementById('readings-reader-filter').value = '';
+      document.getElementById('readings-type-filter').value = '';
+      document.getElementById('readings-photo-filter').value = '';
+      document.getElementById('readings-location-filter').value = '';
+      document.getElementById('readings-month-filter').value = '';
+      document.getElementById('readings-date-from').value = '';
+      document.getElementById('readings-date-to').value = '';
+      readingsSortField = 'readingDate';
+      readingsSortDir = 'desc';
+      updateSortIndicators('readings-table', readingsSortField, readingsSortDir);
+      loadData();
+    }
+
+    document.addEventListener('click', function(e) {
+      if (e.target.classList.contains('sortable')) {
+        const field = e.target.dataset.sort;
+        const table = e.target.closest('table');
+        if (table.id === 'readings-table') {
+          if (readingsSortField === field) {
+            readingsSortDir = readingsSortDir === 'asc' ? 'desc' : 'asc';
+          } else {
+            readingsSortField = field;
+            readingsSortDir = 'asc';
+          }
+          updateSortIndicators('readings-table', readingsSortField, readingsSortDir);
+          renderReadings();
+        }
+      }
+    });
+
+    function populateMonthFilter() {
+      const select = document.getElementById('readings-month-filter');
+      const months = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+      const currentYear = new Date().getFullYear();
+      const currentMonth = new Date().getMonth() + 1;
+      select.innerHTML = '<option value="">كل الشهور</option>';
+      for (let y = currentYear; y >= currentYear - 2; y--) {
+        const maxMonth = (y === currentYear) ? currentMonth : 12;
+        for (let m = maxMonth; m >= 1; m--) {
+          select.innerHTML += `<option value="${y}-${m}">${months[m-1]} ${y}</option>`;
+        }
+      }
+    }
+
+    async function loadReadingsByMonth() {
+      const filter = document.getElementById('readings-month-filter').value;
+      if (!filter) { loadData(); return; }
+      const [year, month] = filter.split('-');
+      document.getElementById('readings-loading').style.display = 'block';
+      try {
+        const response = await fetch(`/api/admin/readings?year=${year}&month=${month}`, { credentials: 'include' });
+        allReadings = await response.json();
+        document.getElementById('totalReadings').textContent = allReadings.length;
+        renderReadings();
+      } catch (error) {
+        showError('فشل تحميل القراءات');
+      } finally {
+        document.getElementById('readings-loading').style.display = 'none';
+      }
+    }
+
+    function editReading(id) {
+      const reading = allReadings.find(r => r.id === id);
+      if (!reading) return;
+      document.getElementById('edit-reading-id').value = id;
+      document.getElementById('edit-reading-value').value = reading.newReading || '';
+      document.getElementById('edit-reading-skip-reason').value = reading.skipReason || '';
+      document.getElementById('edit-reading-notes').value = reading.notes || '';
+      document.getElementById('edit-reading-modal').classList.add('active');
+    }
+
+    function closeEditReadingModal() {
+      document.getElementById('edit-reading-modal').classList.remove('active');
+    }
+
+    async function saveReadingEdit() {
+      const id = document.getElementById('edit-reading-id').value;
+      const newReading = document.getElementById('edit-reading-value').value;
+      const skipReason = document.getElementById('edit-reading-skip-reason').value;
+      const notes = document.getElementById('edit-reading-notes').value;
+      try {
+        const response = await fetch(`/api/admin/readings/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            newReading: newReading ? parseInt(newReading) : null,
+            skipReason: skipReason || null,
+            notes: notes || null,
+          })
+        });
+        if (!response.ok) throw new Error();
+        showSuccess('تم تحديث القراءة');
+        closeEditReadingModal();
+        loadData();
+      } catch (error) {
+        showError('فشل تحديث القراءة');
+      }
+    }
+
+    async function deleteReading(id) {
+      if (!confirm('هل أنت متأكد من حذف هذه القراءة؟')) return;
+      try {
+        const response = await fetch(`/api/admin/readings/${id}`, {
+          method: 'DELETE',
+          credentials: 'include'
+        });
+        if (!response.ok) throw new Error();
+        showSuccess('تم حذف القراءة');
+        loadData();
+      } catch (error) {
+        showError('فشل حذف القراءة');
+      }
+    }
+
+    async function deleteAllReadings() {
+      if (!confirm('هل أنت متأكد من حذف جميع القراءات؟ لا يمكن التراجع عن هذا الإجراء.')) return;
+      try {
+        const response = await fetch('/api/admin/readings-all', {
+          method: 'DELETE'
+        });
+        const data = await response.json();
+        if (data.success) {
+          showSuccess('تم حذف جميع القراءات بنجاح');
+          loadData();
+        } else {
+          showError('فشل حذف القراءات: ' + (data.error || 'خطأ غير معروف'));
+        }
+      } catch (error) {
+        showError('حدث خطأ أثناء حذف القراءات');
+      }
+    }
+
+    buildNav();
+    loadData();
+  </script>
+  <script src="/admin-shared.js"></script>
+</body>
+</html>

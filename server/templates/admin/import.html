@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>رفع البيانات - لوحة تحكم المسؤول</title>
+  <link rel="stylesheet" href="/admin-shared.css">
+</head>
+<body>
+  <header class="header">
+    <h1>لوحة تحكم المسؤول</h1>
+    <div class="header-stats">
+      <button class="logout-btn" onclick="handleLogout()">تسجيل الخروج</button>
+    </div>
+  </header>
+
+  <div class="nav-bar"></div>
+
+  <div class="container">
+    <div class="alert alert-success" id="successAlert"></div>
+    <div class="alert alert-error" id="errorAlert"></div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <h2 class="panel-title">رفع البيانات</h2>
+      </div>
+      <div class="form-group">
+        <label>نوع البيانات</label>
+        <select id="import-type">
+          <option value="meters">عدادات</option>
+          <option value="readers">قراء</option>
+        </select>
+      </div>
+      <div class="upload-area" onclick="document.getElementById('import-file').click()">
+        <input type="file" id="import-file" accept=".json,.csv,.xlsx,.xls,.mdb,.accdb" onchange="handleFileSelect(event)">
+        <div class="upload-icon">📁</div>
+        <div class="upload-text">اضغط لاختيار ملف أو اسحب الملف هنا</div>
+        <div class="upload-hint">يدعم ملفات JSON و CSV و Excel (.xlsx, .xls) و Access (.mdb)</div>
+      </div>
+      <div style="margin-top: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
+        <button class="btn btn-secondary" onclick="downloadTemplate('readers')">
+          <span style="font-size: 18px;">📋</span> تحميل قالب القراء (Excel)
+        </button>
+        <button class="btn btn-secondary" onclick="downloadTemplate('meters')">
+          <span style="font-size: 18px;">📊</span> تحميل قالب المشتركين (Excel)
+        </button>
+      </div>
+      <div id="import-preview" style="margin-top: 20px; display: none;">
+        <h3 style="margin-bottom: 15px;">معاينة البيانات</h3>
+        <div id="preview-content"></div>
+        <button class="btn btn-success" onclick="confirmImport()" style="margin-top: 15px;">
+          تأكيد الرفع
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let importData = null;
+
+    function buildNav() {
+      document.querySelector('.nav-bar').innerHTML = [
+        '<a class="nav-link" href="/admin/dashboard">الإحصائيات</a>',
+        '<a class="nav-link" href="/admin/readers">القراء</a>',
+        '<a class="nav-link" href="/admin/meters">المشتركين</a>',
+        '<a class="nav-link" href="/admin/readings">القراءات</a>',
+        '<a class="nav-link active" href="/admin/import">رفع البيانات</a>',
+        '<a class="nav-link" href="/admin/export">تصدير البيانات</a>'
+      ].join('');
+    }
+
+    function handleFileSelect(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls') || file.name.endsWith('.mdb') || file.name.endsWith('.accdb')) {
+        importData = { binary: true, name: file.name };
+        showImportPreview();
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const content = e.target.result;
+          if (file.name.endsWith('.json')) {
+            importData = JSON.parse(content);
+          } else if (file.name.endsWith('.csv')) {
+            importData = parseCSV(content);
+          }
+          showImportPreview();
+        } catch (error) {
+          showError('فشل قراءة الملف');
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function parseCSV(content) {
+      const lines = content.trim().split('\n');
+      const headers = lines[0].split(',').map(h => h.trim());
+      return lines.slice(1).map(line => {
+        const values = line.split(',').map(v => v.trim());
+        const obj = {};
+        headers.forEach((h, i) => obj[h] = values[i]);
+        return obj;
+      });
+    }
+
+    async function downloadTemplate(type) {
+      try {
+        const response = await fetch(`/api/admin/template/${type}`, { credentials: 'include' });
+        if (!response.ok) throw new Error('Failed to download template');
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `template_${type}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      } catch (error) {
+        showError('فشل تحميل القالب: ' + error.message);
+      }
+    }
+
+    function showImportPreview() {
+      const preview = document.getElementById('import-preview');
+      const content = document.getElementById('preview-content');
+      if (!importData || importData.length === 0) {
+        content.innerHTML = '<p>لا توجد بيانات للعرض</p>';
+      } else if (importData.binary) {
+        content.innerHTML = `<p>الملف جاهز للرفع: <b>${importData.name}</b></p>`;
+      } else {
+        content.innerHTML = `<p>سيتم رفع ${importData.length} سجل</p>`;
+      }
+      preview.style.display = 'block';
+    }
+
+    async function confirmImport() {
+      if (!importData) return;
+      const btn = event?.target || document.querySelector('#import-preview .btn-success');
+      const originalText = btn.textContent;
+
+      try {
+        btn.disabled = true;
+        btn.textContent = 'جاري الرفع...';
+        const type = document.getElementById('import-type').value;
+        const fileInput = document.getElementById('import-file');
+        const file = fileInput.files[0];
+
+        if (file && (file.name.endsWith('.xlsx') || file.name.endsWith('.xls') || file.name.endsWith('.mdb') || file.name.endsWith('.accdb'))) {
+          const formData = new FormData();
+          formData.append('file', file);
+          let endpoint = '';
+          if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+            endpoint = `/api/admin/import-excel/${type}`;
+          } else {
+            endpoint = `/api/admin/import-access/${type}`;
+          }
+          try {
+            const response = await fetch(endpoint, {
+              method: 'POST',
+              body: formData,
+              credentials: 'include'
+            });
+            if (!response.ok) {
+              const errorResult = await response.json();
+              throw new Error(errorResult.error || 'Upload failed');
+            }
+            const result = await response.json();
+            showSuccess(`تم رفع ${result.count} سجل بنجاح`);
+            document.getElementById('import-preview').style.display = 'none';
+            importData = null;
+            fileInput.value = '';
+          } catch (error) {
+            showError('فشل رفع الملف: ' + error.message);
+          }
+        } else {
+          try {
+            const response = await fetch(`/api/admin/import/${type}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify(importData)
+            });
+            if (!response.ok) throw new Error();
+            const result = await response.json();
+            showSuccess(`تم رفع ${result.count} سجل بنجاح`);
+            document.getElementById('import-preview').style.display = 'none';
+            importData = null;
+            fileInput.value = '';
+          } catch (error) {
+            showError('فشل رفع البيانات: ' + error.message);
+          }
+        }
+      } finally {
+        btn.disabled = false;
+        btn.textContent = originalText;
+      }
+    }
+
+    buildNav();
+  </script>
+  <script src="/admin-shared.js"></script>
+</body>
+</html>

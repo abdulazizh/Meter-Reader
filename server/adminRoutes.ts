@@ -48,11 +48,11 @@ function mapCategory(typeCode: number): string {
   return categories[typeCode] || 'منزلي';
 }
 
-function convertDate(date: any): Date {
-  if (!date) return new Date();
+function convertDate(date: any): Date | null {
+  if (!date) return null;
   if (date instanceof Date) return date;
   const parsed = new Date(date);
-  return isNaN(parsed.getTime()) ? new Date() : parsed;
+  return isNaN(parsed.getTime()) ? null : parsed;
 }
 
 export function registerAdminRoutes(app: Express) {
@@ -91,8 +91,40 @@ export function registerAdminRoutes(app: Express) {
     });
   });
 
+  app.get("/admin-shared.css", requireAdmin, (req, res) => {
+    res.sendFile(path.join(process.cwd(), "server/templates/admin/shared.css"));
+  });
+
+  app.get("/admin-shared.js", requireAdmin, (req, res) => {
+    res.sendFile(path.join(process.cwd(), "server/templates/admin/shared.js"));
+  });
+
   app.get("/admin", requireAdmin, (req, res) => {
-    res.sendFile(path.join(process.cwd(), "server/templates/admin/index.html"));
+    res.redirect("/admin/dashboard");
+  });
+
+  app.get("/admin/dashboard", requireAdmin, (req, res) => {
+    res.sendFile(path.join(process.cwd(), "server/templates/admin/dashboard.html"));
+  });
+
+  app.get("/admin/readers", requireAdmin, (req, res) => {
+    res.sendFile(path.join(process.cwd(), "server/templates/admin/readers.html"));
+  });
+
+  app.get("/admin/meters", requireAdmin, (req, res) => {
+    res.sendFile(path.join(process.cwd(), "server/templates/admin/meters.html"));
+  });
+
+  app.get("/admin/readings", requireAdmin, (req, res) => {
+    res.sendFile(path.join(process.cwd(), "server/templates/admin/readings.html"));
+  });
+
+  app.get("/admin/import", requireAdmin, (req, res) => {
+    res.sendFile(path.join(process.cwd(), "server/templates/admin/import.html"));
+  });
+
+  app.get("/admin/export", requireAdmin, (req, res) => {
+    res.sendFile(path.join(process.cwd(), "server/templates/admin/export.html"));
   });
 
   app.get("/api/admin/readers", requireAdmin, async (req, res) => {
@@ -240,7 +272,7 @@ export function registerAdminRoutes(app: Express) {
       
       // Handle date conversion
       if (meterData.previousReadingDate === "") {
-        meterData.previousReadingDate = new Date();
+        meterData.previousReadingDate = null;
       } else if (typeof meterData.previousReadingDate === 'string') {
         meterData.previousReadingDate = new Date(meterData.previousReadingDate);
       }
@@ -502,7 +534,7 @@ export function registerAdminRoutes(app: Express) {
             block: item.block || "1",
             property: item.property || "1",
             previousReading: parseInt(item.previousReading) || 0,
-            previousReadingDate: item.previousReadingDate ? new Date(item.previousReadingDate) : new Date(),
+            previousReadingDate: item.previousReadingDate ? new Date(item.previousReadingDate) : null,
             currentAmount: item.currentAmount || "0",
             debts: item.debts || "0",
             totalAmount: item.totalAmount || "0",
@@ -636,7 +668,7 @@ export function registerAdminRoutes(app: Express) {
             block: String(block || "1"),
             property: String(property || "1"),
             previousReading: parseInt(String(prevReading)) || 0,
-            previousReadingDate: prevDate ? new Date(String(prevDate)) : new Date(),
+            previousReadingDate: prevDate ? new Date(String(prevDate)) : null,
             currentAmount: String(currentAmount || "0"),
             debts: String(debts || "0"),
             totalAmount: String(totalAmount || "0"),

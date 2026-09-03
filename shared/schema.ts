@@ -33,7 +33,7 @@ export const meters = pgTable("meters", {
   block: text("block").notNull(),
   property: text("property").notNull(),
   previousReading: integer("previous_reading").notNull(),
-  previousReadingDate: timestamp("previous_reading_date").notNull(),
+  previousReadingDate: timestamp("previous_reading_date"),
   currentAmount: numeric("current_amount", { precision: 12, scale: 2 }).notNull().default("0"),
   debts: numeric("debts", { precision: 12, scale: 2 }).notNull().default("0"),
   totalAmount: numeric("total_amount", { precision: 12, scale: 2 }).notNull().default("0"),

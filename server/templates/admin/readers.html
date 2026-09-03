@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>القراء - لوحة تحكم المسؤول</title>
+  <link rel="stylesheet" href="/admin-shared.css">
+</head>
+<body>
+  <header class="header">
+    <h1>لوحة تحكم المسؤول</h1>
+    <div class="header-stats">
+      <div class="stat-item">
+        <div class="stat-value" id="totalReaders">0</div>
+        <div class="stat-label">القراء</div>
+      </div>
+      <button class="logout-btn" onclick="handleLogout()">تسجيل الخروج</button>
+    </div>
+  </header>
+
+  <div class="nav-bar"></div>
+
+  <div class="container">
+    <div class="alert alert-success" id="successAlert"></div>
+    <div class="alert alert-error" id="errorAlert"></div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <h2 class="panel-title">إدارة القراء</h2>
+        <button class="btn btn-primary" onclick="showAddReaderModal()">+ إضافة قارئ جديد</button>
+      </div>
+      <div class="loading" id="readers-loading">
+        <div class="spinner"></div>
+        <div>جاري التحميل...</div>
+      </div>
+      <table id="readers-table">
+        <thead>
+          <tr>
+            <th>المعرف</th>
+            <th>اسم المستخدم</th>
+            <th>الاسم الظاهر</th>
+            <th>عدد المشتركين</th>
+            <th>الإجراءات</th>
+          </tr>
+        </thead>
+        <tbody id="readers-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="modal" id="reader-modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title" id="reader-modal-title">إضافة قارئ جديد</h3>
+        <button class="modal-close" onclick="closeModal('reader-modal')">&times;</button>
+      </div>
+      <form id="reader-form" onsubmit="saveReader(event)">
+        <input type="hidden" id="reader-id">
+        <div class="form-group">
+          <label>اسم المستخدم</label>
+          <input type="text" id="reader-username" required>
+        </div>
+        <div class="form-group">
+          <label>كلمة المرور</label>
+          <input type="password" id="reader-password" autocomplete="new-password">
+        </div>
+        <div class="form-group">
+          <label>الاسم الظاهر</label>
+          <input type="text" id="reader-displayName" required>
+        </div>
+        <button type="submit" class="btn btn-primary">حفظ</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    let readerList = [];
+
+    function buildNav() {
+      document.querySelector('.nav-bar').innerHTML = [
+        '<a class="nav-link" href="/admin/dashboard">الإحصائيات</a>',
+        '<a class="nav-link active" href="/admin/readers">القراء</a>',
+        '<a class="nav-link" href="/admin/meters">المشتركين</a>',
+        '<a class="nav-link" href="/admin/readings">القراءات</a>',
+        '<a class="nav-link" href="/admin/import">رفع البيانات</a>',
+        '<a class="nav-link" href="/admin/export">تصدير البيانات</a>'
+      ].join('');
+    }
+
+    async function loadReaders() {
+      document.getElementById('readers-loading').classList.add('show');
+      try {
+        const response = await fetch('/api/admin/readers', { credentials: 'include' });
+        if (response.status === 401) { window.location.href = '/admin/login'; return; }
+        readerList = await response.json();
+        renderReaders();
+        document.getElementById('totalReaders').textContent = readerList.length;
+      } catch (error) {
+        showError('فشل تحميل القراء');
+      }
+      document.getElementById('readers-loading').classList.remove('show');
+    }
+
+    function renderReaders() {
+      const tbody = document.getElementById('readers-body');
+      tbody.innerHTML = readerList.map(reader => `
+        <tr>
+          <td>${reader.id.slice(0, 8)}...</td>
+          <td>${reader.username}</td>
+          <td>${reader.displayName}</td>
+          <td>${reader.meterCount || 0}</td>
+          <td class="actions">
+            <button class="btn btn-sm btn-secondary" onclick="editReader('${reader.id}')">تعديل</button>
+            <button class="btn btn-sm btn-danger" onclick="deleteReader('${reader.id}')">حذف</button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function showAddReaderModal() {
+      document.getElementById('reader-modal-title').textContent = 'إضافة قارئ جديد';
+      document.getElementById('reader-form').reset();
+      document.getElementById('reader-id').value = '';
+      document.getElementById('reader-modal').classList.add('active');
+    }
+
+    function editReader(id) {
+      const reader = readerList.find(r => r.id === id);
+      if (!reader) return;
+      document.getElementById('reader-modal-title').textContent = 'تعديل القارئ';
+      document.getElementById('reader-id').value = reader.id;
+      document.getElementById('reader-username').value = reader.username;
+      document.getElementById('reader-displayName').value = reader.displayName;
+      document.getElementById('reader-password').value = '';
+      document.getElementById('reader-modal').classList.add('active');
+    }
+
+    async function saveReader(event) {
+      event.preventDefault();
+      const id = document.getElementById('reader-id').value;
+      const data = {
+        username: document.getElementById('reader-username').value,
+        displayName: document.getElementById('reader-displayName').value,
+      };
+      const password = document.getElementById('reader-password').value;
+      if (password) data.password = password;
+
+      try {
+        const url = id ? `/api/admin/readers/${id}` : '/api/admin/readers';
+        const method = id ? 'PUT' : 'POST';
+        const response = await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(data)
+        });
+        if (!response.ok) throw new Error();
+        showSuccess(id ? 'تم تحديث القارئ' : 'تم إضافة القارئ');
+        closeModal('reader-modal');
+        loadReaders();
+      } catch (error) {
+        showError('فشل حفظ القارئ');
+      }
+    }
+
+    async function deleteReader(id) {
+      if (!confirm('هل أنت متأكد من حذف هذا القارئ؟')) return;
+      try {
+        const response = await fetch(`/api/admin/readers/${id}`, {
+          method: 'DELETE',
+          credentials: 'include'
+        });
+        if (!response.ok) throw new Error();
+        showSuccess('تم حذف القارئ');
+        loadReaders();
+      } catch (error) {
+        showError('فشل حذف القارئ');
+      }
+    }
+
+    buildNav();
+    loadReaders();
+  </script>
+  <script src="/admin-shared.js"></script>
+</body>
+</html>

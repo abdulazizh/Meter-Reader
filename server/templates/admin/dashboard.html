@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>الإحصائيات - لوحة تحكم المسؤول</title>
+  <link rel="stylesheet" href="/admin-shared.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <header class="header">
+    <h1>لوحة تحكم المسؤول</h1>
+    <div class="header-stats">
+      <div class="stat-item">
+        <div class="stat-value" id="totalReaders">0</div>
+        <div class="stat-label">القراء</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="totalMeters">0</div>
+        <div class="stat-label">المشتركين</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="totalReadings">0</div>
+        <div class="stat-label">القراءات</div>
+      </div>
+      <button class="logout-btn" onclick="handleLogout()">تسجيل الخروج</button>
+    </div>
+  </header>
+
+  <div class="nav-bar"></div>
+
+  <div class="container">
+    <div class="alert alert-success" id="successAlert"></div>
+    <div class="alert alert-error" id="errorAlert"></div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <h2 class="panel-title">نظرة عامة على البيانات</h2>
+        <button class="btn btn-secondary" onclick="loadDashboardStats()">تحديث</button>
+      </div>
+
+      <div id="stats-loading" class="loading">
+        <div class="spinner"></div>
+        <div>جاري تحليل البيانات...</div>
+      </div>
+
+      <div class="dashboard-grid">
+        <div class="kpi-card">
+          <div class="kpi-label">نسبة الإنجاز</div>
+          <div class="kpi-value" id="kpi-completion">- %</div>
+          <div class="kpi-progress-container">
+            <div class="kpi-progress-bar" id="kpi-completion-bar" style="width: 0%"></div>
+          </div>
+        </div>
+        <div class="kpi-card" style="border-right-color: #28a745;">
+          <div class="kpi-label">إجمالي المبالغ الحالية</div>
+          <div class="kpi-value" id="kpi-amounts">- د.ع</div>
+        </div>
+        <div class="kpi-card" style="border-right-color: #dc3545;">
+          <div class="kpi-label">إجمالي الديون</div>
+          <div class="kpi-value" id="kpi-debts">- د.ع</div>
+        </div>
+        <div class="kpi-card" style="border-right-color: #ffc107;">
+          <div class="kpi-label">نسبة الجباية</div>
+          <div class="kpi-value" id="kpi-ratio">- %</div>
+        </div>
+      </div>
+
+      <div class="charts-container">
+        <div class="chart-card">
+          <div class="chart-title">توزيع المشتركين حسب الصنف</div>
+          <canvas id="categoriesChart"></canvas>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">حالة القراءات (مكتملة / متخطاة)</div>
+          <canvas id="statusChart"></canvas>
+        </div>
+        <div class="chart-card" style="grid-column: span 2;">
+          <div class="chart-title">أداء القراء (عدد القراءات)</div>
+          <canvas id="performanceChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let categoryMapping = {};
+    let charts = { categories: null, status: null, performance: null };
+
+    function buildNav() {
+      document.querySelector('.nav-bar').innerHTML = [
+        '<a class="nav-link active" href="/admin/dashboard">الإحصائيات</a>',
+        '<a class="nav-link" href="/admin/readers">القراء</a>',
+        '<a class="nav-link" href="/admin/meters">المشتركين</a>',
+        '<a class="nav-link" href="/admin/readings">القراءات</a>',
+        '<a class="nav-link" href="/admin/import">رفع البيانات</a>',
+        '<a class="nav-link" href="/admin/export">تصدير البيانات</a>'
+      ].join('');
+    }
+
+    async function loadDashboardStats() {
+      const loading = document.getElementById('stats-loading');
+      if (loading) loading.style.display = 'block';
+      try {
+        const response = await fetch('/api/admin/dashboard-stats', {
+          credentials: 'include'
+        });
+        if (response.status === 401) {
+          window.location.href = '/admin/login';
+          return;
+        }
+        const data = await response.json();
+
+        categoryMapping = data.categoryNames || {};
+
+        document.getElementById('kpi-completion').textContent = `${data.kpis.completionRate}%`;
+        document.getElementById('kpi-completion-bar').style.width = `${data.kpis.completionRate}%`;
+        document.getElementById('kpi-amounts').textContent = `${data.kpis.totalCurrentAmount.toLocaleString('ar-IQ')} د.ع`;
+        document.getElementById('kpi-debts').textContent = `${data.kpis.totalDebts.toLocaleString('ar-IQ')} د.ع`;
+        document.getElementById('kpi-ratio').textContent = `${data.kpis.collectionRatio}%`;
+
+        document.getElementById('totalReaders').textContent = data.counts.readers;
+        document.getElementById('totalMeters').textContent = data.counts.meters;
+        document.getElementById('totalReadings').textContent = data.counts.readings;
+
+        renderCategoriesChart(data.charts.categories);
+        renderStatusChart(data.charts.statusBreakdown);
+        renderPerformanceChart(data.charts.readerPerformance);
+      } catch (error) {
+        console.error('Error loading dashboard stats:', error);
+        showError('فشل تحميل إحصائيات لوحة التحكم');
+      } finally {
+        if (loading) loading.style.display = 'none';
+      }
+    }
+
+    function renderCategoriesChart(categoryData) {
+      const ctx = document.getElementById('categoriesChart').getContext('2d');
+      if (charts.categories) charts.categories.destroy();
+      const labels = Object.keys(categoryData).map(id => categoryMapping[id] || id);
+      const values = Object.values(categoryData);
+      charts.categories = new Chart(ctx, {
+        type: 'pie',
+        data: {
+          labels,
+          datasets: [{ data: values, backgroundColor: ['#1e5799', '#28a745', '#ffc107', '#dc3545', '#17a2b8', '#6610f2'] }]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { position: 'bottom', labels: { font: { family: 'Cairo' } } } }
+        }
+      });
+    }
+
+    function renderStatusChart(statusData) {
+      const ctx = document.getElementById('statusChart').getContext('2d');
+      if (charts.status) charts.status.destroy();
+      charts.status = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: ['مكتملة', 'متخطاة'],
+          datasets: [{ data: [statusData.completed, statusData.skipped], backgroundColor: ['#28a745', '#ffc107'] }]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { position: 'bottom', labels: { font: { family: 'Cairo' } } } }
+        }
+      });
+    }
+
+    function renderPerformanceChart(performanceData) {
+      const ctx = document.getElementById('performanceChart').getContext('2d');
+      if (charts.performance) charts.performance.destroy();
+      charts.performance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: Object.keys(performanceData),
+          datasets: [{ label: 'عدد القراءات', data: Object.values(performanceData), backgroundColor: '#1e5799' }]
+        },
+        options: {
+          responsive: true,
+          scales: { y: { beginAtZero: true } },
+          plugins: { legend: { display: false } }
+        }
+      });
+    }
+
+    buildNav();
+    loadDashboardStats();
+  </script>
+  <script src="/admin-shared.js"></script>
+</body>
+</html>
